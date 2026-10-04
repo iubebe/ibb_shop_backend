@@ -17,6 +17,7 @@ import { CsrfService } from './csrf.service.js';
 import { CurrentUser } from './decorators/current-user.decorator.js';
 import { AllowWhenPasswordChangeRequired } from './decorators/allow-password-change.decorator.js';
 import { assertValidNewPassword } from './password-policy.js';
+import { StrictThrottle } from '../throttle/decorators.js';
 import { Public } from './decorators/public.decorator.js';
 
 @Controller('auth')
@@ -36,6 +37,7 @@ export class AuthController {
     return { csrfToken };
   }
 
+  @StrictThrottle()
   @Public()
   @Post('login')
   @HttpCode(200)
@@ -49,6 +51,7 @@ export class AuthController {
     return { user };
   }
 
+  @StrictThrottle()
   @Public()
   @Post('refresh')
   @HttpCode(200)
@@ -78,6 +81,7 @@ export class AuthController {
    * First-login reset (also a normal change-password). Allowed while the
    * account is flagged `mustChangePassword`; ends all other sessions.
    */
+  @StrictThrottle()
   @AllowWhenPasswordChangeRequired()
   @Post('change-password')
   @HttpCode(200)
