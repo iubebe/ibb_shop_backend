@@ -7,6 +7,7 @@ import { EventsGateway } from './events/events.gateway.js';
 import { LoggerModule } from './logger/logger.module.js';
 import { VersionModule } from './version/version.module.js';
 import { RedisModule } from './redis/redis.module.js';
+import { AuthModule } from './auth/auth.module.js';
 import { DatabaseModule } from './database/database.module.js';
 
 @Module({
@@ -15,6 +16,7 @@ import { DatabaseModule } from './database/database.module.js';
     LoggerModule,
     DatabaseModule,
     RedisModule,
+    AuthModule,
     VersionModule,
   ],
   controllers: [AppController, HealthController],

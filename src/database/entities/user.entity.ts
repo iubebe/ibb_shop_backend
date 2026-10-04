@@ -26,4 +26,8 @@ export class User extends BaseEntity {
 
   @Column({ type: 'enum', enum: UserRole, default: UserRole.STAFF })
   role: UserRole;
+
+  /** Set for seeded/admin-created accounts: must pick a new password at first login. */
+  @Column({ default: false })
+  mustChangePassword: boolean;
 }
