@@ -1,8 +1,8 @@
 import { Test } from '@nestjs/testing';
 import type { Redis } from 'ioredis';
 import { PinoLogger } from 'nestjs-pino';
-import { REDIS_CLIENT } from './redis.constants.js';
-import { RedisService } from './redis.service.js';
+import { REDIS_CLIENT } from '../redis.constants.js';
+import { RedisService } from '../redis.service.js';
 
 describe('RedisService', () => {
   let service: RedisService;

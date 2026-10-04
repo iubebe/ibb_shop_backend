@@ -1,9 +1,9 @@
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { LoggerModule } from 'nestjs-pino';
-import { REDIS_CLIENT } from './redis.constants.js';
-import { RedisModule } from './redis.module.js';
-import { RedisService } from './redis.service.js';
+import { REDIS_CLIENT } from '../redis.constants.js';
+import { RedisModule } from '../redis.module.js';
+import { RedisService } from '../redis.service.js';
 
 const { RedisMock } = vi.hoisted(() => {
   const ctor = vi.fn();
