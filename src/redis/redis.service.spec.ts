@@ -1,5 +1,6 @@
 import { Test } from '@nestjs/testing';
 import type { Redis } from 'ioredis';
+import { PinoLogger } from 'nestjs-pino';
 import { REDIS_CLIENT } from './redis.constants.js';
 import { RedisService } from './redis.service.js';
 
@@ -14,7 +15,13 @@ describe('RedisService', () => {
     on: ReturnType<typeof vi.fn>;
   };
 
+  let logger: {
+    info: ReturnType<typeof vi.fn>;
+    error: ReturnType<typeof vi.fn>;
+  };
+
   beforeEach(async () => {
+    logger = { info: vi.fn(), error: vi.fn(), setContext: vi.fn() };
     client = {
       get: vi.fn(),
       set: vi.fn().mockResolvedValue('OK'),
@@ -28,6 +35,7 @@ describe('RedisService', () => {
       providers: [
         RedisService,
         { provide: REDIS_CLIENT, useValue: client as unknown as Redis },
+        { provide: PinoLogger, useValue: logger },
       ],
     }).compile();
 
@@ -37,6 +45,24 @@ describe('RedisService', () => {
   it('registers error and ready listeners', () => {
     const events = client.on.mock.calls.map(([event]) => event);
     expect(events).toEqual(expect.arrayContaining(['error', 'ready']));
+  });
+
+  it('sets the logger context', () => {
+    expect(logger.setContext).toHaveBeenCalledWith('RedisService');
+  });
+
+  it('logs redis errors and readiness through pino', () => {
+    const handler = (event: string) =>
+      client.on.mock.calls.find(([e]) => e === event)![1] as (
+        e?: Error,
+      ) => void;
+
+    const err = new Error('boom');
+    handler('error')(err);
+    handler('ready')();
+
+    expect(logger.error).toHaveBeenCalledWith({ err }, 'Redis error');
+    expect(logger.info).toHaveBeenCalledWith('Redis connected');
   });
 
   describe('get', () => {

@@ -1,5 +1,6 @@
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
+import { LoggerModule } from 'nestjs-pino';
 import { REDIS_CLIENT } from './redis.constants.js';
 import { RedisModule } from './redis.module.js';
 import { RedisService } from './redis.service.js';
@@ -26,6 +27,7 @@ async function build(env: Record<string, unknown>) {
         ignoreEnvFile: true,
         load: [() => env],
       }),
+      LoggerModule.forRoot({ pinoHttp: { level: 'silent' } }),
       RedisModule,
     ],
   }).compile();
