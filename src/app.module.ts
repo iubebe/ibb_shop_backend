@@ -10,6 +10,7 @@ import { RedisModule } from './redis/redis.module.js';
 import { ThrottleModule } from './throttle/throttle.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { DatabaseModule } from './database/database.module.js';
+import { GuestModule } from './modules/guest/guest.module.js';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { DatabaseModule } from './database/database.module.js';
     RedisModule,
     ThrottleModule,
     AuthModule,
+    GuestModule,
     VersionModule,
   ],
   controllers: [AppController, HealthController],
