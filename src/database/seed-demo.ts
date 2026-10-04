@@ -84,6 +84,7 @@ async function seedDemo() {
       const lines = demo.items.map((i) => ({
         product: productRows.get(i.product)!,
         quantity: i.quantity,
+        served: i.served ?? 0,
       }));
       const order = await orders.save(
         orders.create({
@@ -104,6 +105,7 @@ async function seedDemo() {
             productId: l.product.id,
             quantity: l.quantity,
             unitPrice: l.product.price,
+            servedQuantity: l.served,
           }),
         ),
       );

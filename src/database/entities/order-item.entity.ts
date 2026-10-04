@@ -44,6 +44,10 @@ export class OrderItem {
   })
   unitPrice: number;
 
+  /** How many of `quantity` staff have delivered to the table (0..quantity). */
+  @Column({ type: 'int', default: 0 })
+  servedQuantity: number;
+
   @Column({ type: 'varchar', nullable: true })
   notes: string | null;
 }

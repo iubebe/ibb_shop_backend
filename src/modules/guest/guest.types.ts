@@ -25,6 +25,7 @@ export interface GuestOrderView {
     productId: string;
     name: string;
     quantity: number;
+    servedQuantity: number;
     unitPrice: number;
     notes: string | null;
   }[];

@@ -150,6 +150,7 @@ function toOrderView(order: Order): GuestOrderView {
       productId: i.productId,
       name: i.product.name,
       quantity: i.quantity,
+      servedQuantity: i.servedQuantity,
       unitPrice: i.unitPrice,
       notes: i.notes,
     })),

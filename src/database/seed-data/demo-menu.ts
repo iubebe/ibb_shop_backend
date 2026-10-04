@@ -33,14 +33,14 @@ export const demoTableToken = (n: number) =>
 export const DEMO_ORDERS: ReadonlyArray<{
   table: number;
   status: 'pending_confirmation' | 'confirmed';
-  items: ReadonlyArray<{ product: string; quantity: number }>;
+  items: ReadonlyArray<{ product: string; quantity: number; served?: number }>;
 }> = [
   {
     table: 1,
     status: 'confirmed',
     items: [
-      { product: 'Mẹt 3 Miền', quantity: 1 },
-      { product: 'Nem lụi Huế', quantity: 2 },
+      { product: 'Mẹt 3 Miền', quantity: 1, served: 1 },
+      { product: 'Nem lụi Huế', quantity: 2, served: 1 },
     ],
   },
   {

@@ -11,6 +11,7 @@ import { ThrottleModule } from './throttle/throttle.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { GuestModule } from './modules/guest/guest.module.js';
+import { OrdersModule } from './modules/orders/orders.module.js';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { GuestModule } from './modules/guest/guest.module.js';
     ThrottleModule,
     AuthModule,
     GuestModule,
+    OrdersModule,
     VersionModule,
   ],
   controllers: [AppController, HealthController],
