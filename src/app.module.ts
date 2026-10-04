@@ -11,6 +11,8 @@ import { ThrottleModule } from './throttle/throttle.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { GuestModule } from './modules/guest/guest.module.js';
+import { CategoriesModule } from './modules/categories/categories.module.js';
+import { ProductsModule } from './modules/products/products.module.js';
 import { OrdersModule } from './modules/orders/orders.module.js';
 
 @Module({
@@ -23,6 +25,8 @@ import { OrdersModule } from './modules/orders/orders.module.js';
     AuthModule,
     GuestModule,
     OrdersModule,
+    CategoriesModule,
+    ProductsModule,
     VersionModule,
   ],
   controllers: [AppController, HealthController],
