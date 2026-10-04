@@ -7,12 +7,18 @@ import { EventsGateway } from './events/events.gateway.js';
 import { LoggerModule } from './logger/logger.module.js';
 import { VersionModule } from './version/version.module.js';
 import { RedisModule } from './redis/redis.module.js';
+import { ThrottleModule } from './throttle/throttle.module.js';
+import { AuthModule } from './auth/auth.module.js';
+import { DatabaseModule } from './database/database.module.js';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     LoggerModule,
+    DatabaseModule,
     RedisModule,
+    ThrottleModule,
+    AuthModule,
     VersionModule,
   ],
   controllers: [AppController, HealthController],
