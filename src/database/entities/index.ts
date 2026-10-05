@@ -1,3 +1,4 @@
+import { AttendanceRecord } from './attendance-record.entity.js';
 import { Branch } from './branch.entity.js';
 import { Category } from './category.entity.js';
 import { DiningTable } from './dining-table.entity.js';
@@ -10,6 +11,7 @@ import { StockMovement } from './stock-movement.entity.js';
 import { User } from './user.entity.js';
 
 export {
+  AttendanceRecord,
   Branch,
   Category,
   DiningTable,
@@ -33,4 +35,5 @@ export const entities = [
   PaymentQrCode,
   Order,
   OrderItem,
+  AttendanceRecord,
 ];

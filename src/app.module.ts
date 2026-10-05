@@ -16,6 +16,8 @@ import { DashboardModule } from './modules/dashboard/dashboard.module.js';
 import { CategoriesModule } from './modules/categories/categories.module.js';
 import { ProductsModule } from './modules/products/products.module.js';
 import { OrdersModule } from './modules/orders/orders.module.js';
+import { UsersModule } from './modules/users/users.module.js';
+import { AttendanceModule } from './modules/attendance/attendance.module.js';
 
 @Module({
   imports: [
@@ -31,6 +33,8 @@ import { OrdersModule } from './modules/orders/orders.module.js';
     CategoriesModule,
     DashboardModule,
     ProductsModule,
+    UsersModule,
+    AttendanceModule,
     VersionModule,
   ],
   controllers: [AppController, HealthController],

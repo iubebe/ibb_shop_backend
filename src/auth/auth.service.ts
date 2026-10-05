@@ -50,6 +50,10 @@ export class AuthService {
     if (!(await this.passwords.verify(user.passwordHash, password))) {
       throw new UnauthorizedException('Invalid credentials');
     }
+    // Checked after the password so the message only reaches the account owner.
+    if (!user.isActive) {
+      throw new UnauthorizedException('Account is disabled');
+    }
 
     const session = await this.refreshStore.create(user.id);
     const access = await this.tokens.signAccessToken({
@@ -75,7 +79,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
     const user = await this.users.findOneBy({ id: result.userId });
-    if (!user) {
+    if (!user?.isActive) {
       await this.refreshStore.revokeSession(result.sessionId);
       throw new UnauthorizedException('Invalid refresh token');
     }
@@ -138,7 +142,7 @@ export class AuthService {
 
   async me(userId: string): Promise<PublicUser> {
     const user = await this.users.findOneBy({ id: userId });
-    if (!user) throw new UnauthorizedException();
+    if (!user?.isActive) throw new UnauthorizedException();
     return toPublic(user);
   }
 }

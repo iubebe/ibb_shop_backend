@@ -44,6 +44,12 @@ import { WsAuthMiddleware } from './ws-auth.middleware.js';
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
-  exports: [AUTH_CONFIG, PasswordService, TokenService, WsAuthMiddleware],
+  exports: [
+    AUTH_CONFIG,
+    PasswordService,
+    RefreshTokenStore,
+    TokenService,
+    WsAuthMiddleware,
+  ],
 })
 export class AuthModule {}

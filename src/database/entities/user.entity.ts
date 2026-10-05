@@ -30,4 +30,8 @@ export class User extends BaseEntity {
   /** Set for seeded/admin-created accounts: must pick a new password at first login. */
   @Column({ default: false })
   mustChangePassword: boolean;
+
+  /** Disabled accounts cannot log in or refresh; their history is kept. */
+  @Column({ default: true })
+  isActive: boolean;
 }
