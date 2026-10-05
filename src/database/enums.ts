@@ -26,3 +26,10 @@ export enum StockMovementReason {
   MANUAL_ADJUSTMENT = 'manual_adjustment',
   RESTOCK = 'restock',
 }
+
+/** Outcome of the (later, asynchronous) face check on an attendance photo. */
+export enum FaceCheckStatus {
+  PENDING = 'pending',
+  PASSED = 'passed',
+  FAILED = 'failed',
+}

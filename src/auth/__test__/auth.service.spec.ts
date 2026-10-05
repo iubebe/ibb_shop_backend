@@ -10,6 +10,7 @@ const dbUser = {
   branchId: 'b1',
   passwordHash: 'hash',
   mustChangePassword: false,
+  isActive: true,
 };
 
 function setup() {
@@ -99,6 +100,22 @@ describe('AuthService', () => {
     store.rotate.mockResolvedValue({ status: 'reused' });
     await expect(service.refresh('x.y')).rejects.toThrow(UnauthorizedException);
     expect(logger.warn).toHaveBeenCalled();
+  });
+
+  it('login rejects a disabled account after a correct password', async () => {
+    const { service, qb, passwords, store } = setup();
+    qb.getOne.mockResolvedValue({ ...dbUser, isActive: false });
+    passwords.verify.mockResolvedValue(true);
+    await expect(service.login('e@x.io', 'pw')).rejects.toThrow('Account is disabled');
+    expect(store.create).not.toHaveBeenCalled();
+  });
+
+  it('refresh revokes the session of a disabled user', async () => {
+    const { service, users, store } = setup();
+    store.rotate.mockResolvedValue({ status: 'ok', userId: 'u1', sessionId: 's1', token: 't' });
+    users.findOneBy.mockResolvedValue({ ...dbUser, isActive: false });
+    await expect(service.refresh('s1.old')).rejects.toThrow(UnauthorizedException);
+    expect(store.revokeSession).toHaveBeenCalledWith('s1');
   });
 
   it('refresh revokes the session when the user no longer exists', async () => {
