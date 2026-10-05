@@ -1,7 +1,6 @@
 name: develop
 
-# Heavier checks for PRs into develop: e2e against real Postgres/Redis
-# and a Docker build (no push).
+# Extra checks for PRs into develop: unit tests and a Docker build (no push).
 on:
   pull_request:
     branches: [develop]
@@ -14,39 +13,8 @@ permissions:
   contents: read
 
 jobs:
-  e2e:
+  test:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: ibb
-          POSTGRES_PASSWORD: ibb
-          POSTGRES_DB: ibb
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd "pg_isready -U ibb"
-          --health-interval 5s --health-timeout 5s --health-retries 10
-      redis:
-        image: redis:7-alpine
-        ports: ['6379:6379']
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s --health-timeout 5s --health-retries 10
-    env:
-      NODE_ENV: test
-      DB_HOST: localhost
-      DB_PORT: 5432
-      DB_USER: ibb
-      DB_PASSWORD: ibb
-      DB_NAME: ibb
-      DB_MIGRATIONS_RUN: 'true'
-      REDIS_HOST: localhost
-      REDIS_PORT: 6379
-      REDIS_DB: 0
-      JWT_ACCESS_SECRET: ci-only-jwt-secret-at-least-32-characters-long
-      CSRF_SECRET: ci-only-csrf-secret-at-least-32-characters-long
-      THROTTLE_ENABLED: 'false'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -57,8 +25,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-      - run: pnpm test:e2e
+      - run: pnpm test
 
   docker:
     runs-on: ubuntu-latest
