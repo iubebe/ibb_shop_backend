@@ -5,6 +5,7 @@ import {
   Param,
   ParseUUIDPipe,
   Patch,
+  Post,
   Query,
 } from '@nestjs/common';
 import type { AuthUser } from '../../auth/auth.types.js';
@@ -12,6 +13,7 @@ import { CurrentUser } from '../../auth/decorators/current-user.decorator.js';
 import { Roles } from '../../auth/decorators/roles.decorator.js';
 import { UserRole } from '../../database/enums.js';
 import { ListOrdersQuery } from './dto/list-orders.query.js';
+import { PayOrderDto } from './dto/pay-order.dto.js';
 import { UpdateServedDto } from './dto/update-served.dto.js';
 import { OrdersService } from './orders.service.js';
 
@@ -41,5 +43,36 @@ export class OrdersController {
       itemId,
       dto.servedQuantity,
     );
+  }
+
+  /** Reception accepts a pending guest order. */
+  @Roles(UserRole.ADMIN, UserRole.STAFF)
+  @Post(':orderId/confirm')
+  confirm(
+    @CurrentUser() user: AuthUser,
+    @Param('orderId', ParseUUIDPipe) orderId: string,
+  ) {
+    return this.orders.confirm(user.branchId, orderId);
+  }
+
+  /** Reception rejects or cancels an unpaid order. */
+  @Roles(UserRole.ADMIN, UserRole.STAFF)
+  @Post(':orderId/cancel')
+  cancel(
+    @CurrentUser() user: AuthUser,
+    @Param('orderId', ParseUUIDPipe) orderId: string,
+  ) {
+    return this.orders.cancel(user.branchId, orderId);
+  }
+
+  /** Cashier checkout of a confirmed order. */
+  @Roles(UserRole.ADMIN, UserRole.CASHIER)
+  @Post(':orderId/pay')
+  pay(
+    @CurrentUser() user: AuthUser,
+    @Param('orderId', ParseUUIDPipe) orderId: string,
+    @Body() dto: PayOrderDto,
+  ) {
+    return this.orders.pay(user.branchId, orderId, dto.paymentMethod);
   }
 }

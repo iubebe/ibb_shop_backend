@@ -1,4 +1,4 @@
-import type { OrderStatus } from '../../database/enums.js';
+import type { OrderStatus, PaymentMethod } from '../../database/enums.js';
 
 export interface StaffOrderView {
   id: string;
@@ -22,4 +22,13 @@ export interface ServedItemView {
   id: string;
   quantity: number;
   servedQuantity: number;
+}
+
+/** Result of a status transition (confirm, cancel, pay). */
+export interface OrderTransitionView {
+  id: string;
+  status: OrderStatus;
+  confirmedAt: Date | null;
+  paidAt: Date | null;
+  paymentMethod: PaymentMethod | null;
 }

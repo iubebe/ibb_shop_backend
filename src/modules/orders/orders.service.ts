@@ -8,10 +8,18 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { OrderItem } from '../../database/entities/order-item.entity.js';
 import { Order } from '../../database/entities/order.entity.js';
-import { OrderStatus } from '../../database/enums.js';
-import type { ServedItemView, StaffOrderView } from './orders.types.js';
+import {
+  OrderStatus,
+  PaymentMethod,
+  PaymentStatus,
+} from '../../database/enums.js';
+import type {
+  OrderTransitionView,
+  ServedItemView,
+  StaffOrderView,
+} from './orders.types.js';
 
-/** Staff-side order reads and serving progress, always scoped to the user's branch. */
+/** Staff-side order reads, status transitions and serving progress, always scoped to the user's branch. */
 @Injectable()
 export class OrdersService {
   constructor(
@@ -72,6 +80,78 @@ export class OrdersService {
       }
       await manager.update(OrderItem, item.id, { servedQuantity });
       return { id: item.id, quantity: item.quantity, servedQuantity };
+    });
+  }
+
+  /** Reception accepts a guest order: pending -> confirmed. */
+  confirm(branchId: string, orderId: string): Promise<OrderTransitionView> {
+    return this.transition(
+      branchId,
+      orderId,
+      [OrderStatus.PENDING_CONFIRMATION],
+      'Only orders waiting for confirmation can be confirmed',
+      () => ({ status: OrderStatus.CONFIRMED, confirmedAt: new Date() }),
+    );
+  }
+
+  /** Rejects or cancels an order that has not been paid yet. */
+  cancel(branchId: string, orderId: string): Promise<OrderTransitionView> {
+    return this.transition(
+      branchId,
+      orderId,
+      [OrderStatus.PENDING_CONFIRMATION, OrderStatus.CONFIRMED],
+      'Only unpaid orders can be cancelled',
+      () => ({ status: OrderStatus.CANCELLED }),
+    );
+  }
+
+  /** Cashier checkout: confirmed -> paid, recording how the guest paid. */
+  pay(
+    branchId: string,
+    orderId: string,
+    paymentMethod: PaymentMethod,
+  ): Promise<OrderTransitionView> {
+    return this.transition(
+      branchId,
+      orderId,
+      [OrderStatus.CONFIRMED],
+      'Only confirmed orders can be paid',
+      () => ({
+        status: OrderStatus.PAID,
+        paymentMethod,
+        paymentStatus: PaymentStatus.PAID,
+        paidAt: new Date(),
+      }),
+    );
+  }
+
+  /** Moves an order between statuses under a row lock, so retries and double taps are rejected, not applied twice. */
+  private transition(
+    branchId: string,
+    orderId: string,
+    allowedFrom: OrderStatus[],
+    conflictMessage: string,
+    changes: () => Partial<Order>,
+  ): Promise<OrderTransitionView> {
+    return this.dataSource.transaction(async (manager) => {
+      const order = await manager.findOne(Order, {
+        where: { id: orderId, branchId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!order) throw new NotFoundException('Order not found');
+      if (!allowedFrom.includes(order.status)) {
+        throw new ConflictException(conflictMessage);
+      }
+      const patch = changes();
+      await manager.update(Order, order.id, patch);
+      const next = { ...order, ...patch };
+      return {
+        id: next.id,
+        status: next.status,
+        confirmedAt: next.confirmedAt,
+        paidAt: next.paidAt,
+        paymentMethod: next.paymentMethod,
+      };
     });
   }
 }
