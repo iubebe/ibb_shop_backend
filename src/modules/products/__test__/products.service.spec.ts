@@ -2,6 +2,9 @@ import { BadRequestException, ConflictException, NotFoundException } from '@nest
 import { QueryFailedError } from 'typeorm';
 import { ProductsService } from '../products.service.js';
 
+const MEDIA = 'https://media.example.vn';
+const PNG = Buffer.from('89504e470d0a1a0a00', 'hex');
+
 function build(opts: { found?: unknown; categoryExists?: boolean; removeError?: unknown } = {}) {
   const products = {
     findOneBy: vi.fn().mockResolvedValue(opts.found ?? null),
@@ -15,7 +18,18 @@ function build(opts: { found?: unknown; categoryExists?: boolean; removeError?: 
       : vi.fn().mockResolvedValue(undefined),
   };
   const categories = { existsBy: vi.fn().mockResolvedValue(opts.categoryExists ?? true) };
-  return { service: new ProductsService(products as never, categories as never), products, categories };
+  const s3 = {
+    upload: vi.fn((key: string) => Promise.resolve({ url: `${MEDIA}/${key}` })),
+    delete: vi.fn().mockResolvedValue(undefined),
+    keyFromPublicUrl: (url: string) =>
+      url.startsWith(`${MEDIA}/`) ? url.slice(MEDIA.length + 1) : null,
+  };
+  return {
+    service: new ProductsService(products as never, categories as never, s3 as never),
+    products,
+    categories,
+    s3,
+  };
 }
 
 describe('ProductsService', () => {
@@ -65,5 +79,41 @@ describe('ProductsService', () => {
     const { service, products } = build({ found });
     await service.remove('b1', 'p1');
     expect(products.remove).toHaveBeenCalledWith(found);
+  });
+
+  it('uploads an image under the branch prefix and deletes the replaced one', async () => {
+    const found = { id: 'p1', imageUrl: `${MEDIA}/products/b1/old.jpg` };
+    const { service, s3 } = build({ found });
+    const res = await service.setImage('b1', 'p1', PNG);
+    expect(s3.upload).toHaveBeenCalledWith(
+      expect.stringMatching(/^products\/b1\/[0-9a-f-]{36}\.png$/),
+      PNG,
+      expect.objectContaining({ contentType: 'image/png' }),
+    );
+    expect(res.imageUrl).toMatch(/^https:\/\/media\.example\.vn\/products\/b1\/.+\.png$/);
+    expect(s3.delete).toHaveBeenCalledWith('products/b1/old.jpg');
+  });
+
+  it('rejects non-image bytes and missing files before touching S3', async () => {
+    const { service, s3 } = build({ found: { id: 'p1' } });
+    await expect(service.setImage('b1', 'p1', Buffer.from('<html>'))).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.setImage('b1', 'p1', undefined)).rejects.toBeInstanceOf(BadRequestException);
+    expect(s3.upload).not.toHaveBeenCalled();
+  });
+
+  it('404s on upload for a product outside the branch', async () => {
+    const { service, s3 } = build();
+    await expect(service.setImage('b1', 'x', PNG)).rejects.toBeInstanceOf(NotFoundException);
+    expect(s3.upload).not.toHaveBeenCalled();
+  });
+
+  it('removes the image, leaving foreign URLs alone', async () => {
+    const own = build({ found: { id: 'p1', imageUrl: `${MEDIA}/products/b1/a.png` } });
+    await expect(own.service.removeImage('b1', 'p1')).resolves.toMatchObject({ imageUrl: null });
+    expect(own.s3.delete).toHaveBeenCalledWith('products/b1/a.png');
+
+    const foreign = build({ found: { id: 'p1', imageUrl: 'https://cdn.other/x.png' } });
+    await foreign.service.removeImage('b1', 'p1');
+    expect(foreign.s3.delete).not.toHaveBeenCalled();
   });
 });

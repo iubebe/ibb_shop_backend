@@ -161,6 +161,14 @@ export class S3Service {
     return `${base}/${encoded}`;
   }
 
+  /** Inverse of `getPublicUrl` for the default bucket; null for foreign URLs. */
+  keyFromPublicUrl(url: string): string | null {
+    const prefix = `${this.options.publicUrl}/`;
+    if (!url.startsWith(prefix)) return null;
+    const key = url.slice(prefix.length).split('/').map(decodeURIComponent).join('/');
+    return key || null;
+  }
+
   /** Time-limited read URL for private objects. */
   async getPresignedGetUrl(
     key: string,
