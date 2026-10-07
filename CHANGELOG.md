@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/iubebe/ibb_shop_backend/compare/ibb_shop_backend-v0.1.0...ibb_shop_backend-v0.1.1) (2026-10-07)
+
+
+### Bug Fixes
+
+* cd by env and ci sync develop ([#15](https://github.com/iubebe/ibb_shop_backend/issues/15)) ([ff0f2ee](https://github.com/iubebe/ibb_shop_backend/commit/ff0f2ee809f7d75f8ef862c00a86c6ff39346ed0))
+
 ## [0.1.0](https://github.com/iubebe/ibb_shop_backend/compare/ibb_shop_backend-v0.0.2...ibb_shop_backend-v0.1.0) (2026-10-07)
 
 
