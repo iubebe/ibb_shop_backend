@@ -110,7 +110,7 @@ export class TablesService {
     for (const [i, table] of rows.entries()) {
       const slot = i % perPage;
       if (i > 0 && slot === 0) doc.addPage();
-      const png = await QRCode.toBuffer(`${this.guestUrl}/t/${table.qrToken}`, {
+      const png = await QRCode.toBuffer(`${this.guestUrl}/?table=${table.qrToken}`, {
         errorCorrectionLevel: 'M',
         margin: 1,
         width: 600,
