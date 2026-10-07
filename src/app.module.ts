@@ -18,6 +18,7 @@ import { ProductsModule } from './modules/products/products.module.js';
 import { OrdersModule } from './modules/orders/orders.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 import { AttendanceModule } from './modules/attendance/attendance.module.js';
+import { TablesModule } from './modules/tables/tables.module.js';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { AttendanceModule } from './modules/attendance/attendance.module.js';
     ProductsModule,
     UsersModule,
     AttendanceModule,
+    TablesModule,
     VersionModule,
   ],
   controllers: [AppController, HealthController],
