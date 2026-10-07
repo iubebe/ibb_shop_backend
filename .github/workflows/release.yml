@@ -49,3 +49,21 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository }}:${{ needs.release-please.outputs.version }}
             ghcr.io/${{ github.repository }}:latest
+
+  # Asks the release repo to open a PR that sets BACKEND_VERSION for prod. Devops
+  # merge it when they want the release live (doco-cd then deploys it).
+  # Needs the secret RELEASE_REPO_TOKEN: a fine-grained PAT on
+  # iubebe/ibb_shop_release only, with "Actions: read and write" (it can start
+  # the workflow, not push code).
+  request-prod-deploy:
+    needs: [release-please, image]
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open the prod version PR
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: |
+          gh workflow run bump-version.yml -R iubebe/ibb_shop_release \
+            -f service=backend -f version="$VERSION" -f environment=prod
