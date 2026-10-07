@@ -5,9 +5,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { randomUUID } from 'node:crypto';
 import { QueryFailedError, Repository } from 'typeorm';
 import { Category } from '../../database/entities/category.entity.js';
 import { Product } from '../../database/entities/product.entity.js';
+import { S3Service } from '../../s3/s3.service.js';
+import { detectImage } from './product-image.js';
 import type { CreateProductDto, UpdateProductDto } from './dto/product.dto.js';
 import type { ProductView } from './products.types.js';
 
@@ -20,6 +23,7 @@ export class ProductsService {
   constructor(
     @InjectRepository(Product) private readonly products: Repository<Product>,
     @InjectRepository(Category) private readonly categories: Repository<Category>,
+    private readonly s3: S3Service,
   ) {}
 
   async list(branchId: string, categoryId?: string): Promise<ProductView[]> {
@@ -57,16 +61,53 @@ export class ProductsService {
     }
     if (dto.name !== undefined) product.name = dto.name;
     if (dto.price !== undefined) product.price = dto.price;
+    const oldImageUrl = product.imageUrl;
     if (dto.imageUrl !== undefined) product.imageUrl = dto.imageUrl;
     if (dto.isActive !== undefined) product.isActive = dto.isActive;
-    return view(await this.products.save(product));
+    const saved = await this.products.save(product);
+    if (dto.imageUrl !== undefined && oldImageUrl !== saved.imageUrl) {
+      await this.deleteStoredImage(oldImageUrl);
+    }
+    return view(saved);
+  }
+
+  /** Stores the upload in S3 (served publicly as media.<domain>) and points the product at it. */
+  async setImage(
+    branchId: string,
+    id: string,
+    buffer: Buffer | undefined,
+  ): Promise<ProductView> {
+    const { ext, contentType } = detectImage(buffer);
+    const product = await this.find(branchId, id);
+    const { url } = await this.s3.upload(
+      `products/${branchId}/${randomUUID()}.${ext}`,
+      buffer!,
+      // Keys are unique per upload, so the object never changes.
+      { contentType, cacheControl: 'public, max-age=31536000, immutable' },
+    );
+    const oldImageUrl = product.imageUrl;
+    product.imageUrl = url;
+    const saved = await this.products.save(product);
+    await this.deleteStoredImage(oldImageUrl);
+    return view(saved);
+  }
+
+  async removeImage(branchId: string, id: string): Promise<ProductView> {
+    const product = await this.find(branchId, id);
+    const oldImageUrl = product.imageUrl;
+    product.imageUrl = null;
+    const saved = await this.products.save(product);
+    await this.deleteStoredImage(oldImageUrl);
+    return view(saved);
   }
 
   /** Products that appear in orders can't be deleted (order history); deactivate them instead. */
   async remove(branchId: string, id: string): Promise<void> {
     const product = await this.find(branchId, id);
+    const imageUrl = product.imageUrl;
     try {
       await this.products.remove(product);
+      await this.deleteStoredImage(imageUrl);
     } catch (err) {
       if (
         err instanceof QueryFailedError &&
@@ -77,6 +118,17 @@ export class ProductsService {
         );
       }
       throw err;
+    }
+  }
+
+  /** Best effort: only our own objects; a failed cleanup must not fail the request. */
+  private async deleteStoredImage(url: string | null): Promise<void> {
+    const key = url ? this.s3.keyFromPublicUrl(url) : null;
+    if (!key) return;
+    try {
+      await this.s3.delete(key);
+    } catch {
+      // orphaned object, harmless
     }
   }
 
