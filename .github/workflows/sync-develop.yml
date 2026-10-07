@@ -1,0 +1,55 @@
+name: sync-develop
+
+# After every push to main (a merged develop PR, or release-please's version and
+# changelog commit), merge main back into develop so develop never falls behind.
+# If the merge conflicts or develop is protected, a PR main -> develop is opened
+# instead, for a person to resolve.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-develop
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+      - name: Merge main into develop
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git merge-base --is-ancestor origin/main HEAD; then
+            echo "develop already contains main"
+            exit 0
+          fi
+
+          # A real merge commit: develop's history is never rewritten.
+          if git merge --no-edit origin/main && git push origin develop; then
+            echo "develop updated from main"
+            exit 0
+          fi
+
+          echo "Could not merge or push directly; falling back to a PR"
+          git merge --abort 2>/dev/null || true
+          number="$(gh pr list --head main --base develop --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$number" ]; then
+            echo "PR #${number} (main -> develop) is already open"
+          else
+            gh pr create --base develop --head main \
+              --title "chore: sync main into develop" \
+              --body "main has commits that develop does not. Merge with a **merge commit** (not squash), resolving conflicts if any. Opened by the sync-develop workflow."
+          fi
