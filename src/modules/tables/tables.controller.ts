@@ -23,6 +23,7 @@ import { TablesService } from './tables.service.js';
 export class TablesController {
   constructor(private readonly tables: TablesService) {}
 
+  @Roles(UserRole.ADMIN, UserRole.STAFF)
   @Get()
   list(@CurrentUser() user: AuthUser) {
     return this.tables.list(user.branchId);

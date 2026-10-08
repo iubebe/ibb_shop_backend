@@ -20,5 +20,6 @@ import { GuestService } from './guest.service.js';
   ],
   controllers: [GuestController],
   providers: [GuestService],
+  exports: [GuestService],
 })
 export class GuestModule {}
