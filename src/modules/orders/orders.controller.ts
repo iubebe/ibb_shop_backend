@@ -35,6 +35,31 @@ export class OrdersController {
     return this.orders.createOrder(user.branchId, user.id, dto);
   }
 
+  /** Confirm a pending order (guest orders only). */
+  @Roles(UserRole.ADMIN, UserRole.STAFF)
+  @Post(':orderId/confirm')
+  confirm(@CurrentUser() user: AuthUser, @Param('orderId', ParseUUIDPipe) orderId: string) {
+    return this.orders.confirm(user.branchId, orderId);
+  }
+
+  /** Cancel an order. */
+  @Roles(UserRole.ADMIN, UserRole.STAFF)
+  @Post(':orderId/cancel')
+  cancel(@CurrentUser() user: AuthUser, @Param('orderId', ParseUUIDPipe) orderId: string) {
+    return this.orders.cancel(user.branchId, orderId);
+  }
+
+  /** Mark order as paid. */
+  @Roles(UserRole.ADMIN, UserRole.CASHIER)
+  @Post(':orderId/pay')
+  pay(
+    @CurrentUser() user: AuthUser,
+    @Param('orderId', ParseUUIDPipe) orderId: string,
+    @Body() dto: { paymentMethod: 'cash' | 'qr_manual' },
+  ) {
+    return this.orders.pay(user.branchId, orderId, dto.paymentMethod);
+  }
+
   /** Staff marks how many units were delivered to the table. */
   @Roles(UserRole.ADMIN, UserRole.STAFF)
   @Patch(':orderId/items/:itemId/served')

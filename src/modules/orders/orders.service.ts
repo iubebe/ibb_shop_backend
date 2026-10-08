@@ -31,7 +31,7 @@ export class OrdersService {
     const orders = await this.orders.find({
       where: { branchId, ...(status ? { status } : {}) },
       relations: { table: true, items: { product: true } },
-      order: { createdAt: 'ASC' },
+      order: { updatedAt: 'DESC' },
     });
     return orders.map((o) => ({
       id: o.id,
@@ -91,7 +91,8 @@ export class OrdersService {
           branchId,
           tableId: table.id,
           createdByUserId: userId,
-          status: OrderStatus.PENDING_CONFIRMATION,
+          status: OrderStatus.CONFIRMED,
+          confirmedAt: new Date(),
           total,
         }),
       );
@@ -130,6 +131,76 @@ export class OrdersService {
     };
   }
 
+  /** Confirm a pending order (guest orders only). */
+  async confirm(branchId: string, orderId: string): Promise<StaffOrderView> {
+    return this.dataSource.transaction(async (manager) => {
+      const order = await manager.findOne(Order, {
+        where: { id: orderId, branchId },
+        relations: { table: true, items: { product: true } },
+        lock: { mode: 'pessimistic_write', tables: ['orders'] },
+      });
+      if (!order) throw new NotFoundException('Order not found');
+      if (order.status !== OrderStatus.PENDING_CONFIRMATION) {
+        throw new ConflictException('Only pending orders can be confirmed');
+      }
+      await manager.update(Order, orderId, {
+        status: OrderStatus.CONFIRMED,
+        confirmedAt: new Date(),
+      });
+      order.status = OrderStatus.CONFIRMED;
+      order.confirmedAt = new Date();
+      return this.toStaffOrderView(order);
+    });
+  }
+
+  /** Cancel an order. */
+  async cancel(branchId: string, orderId: string): Promise<StaffOrderView> {
+    return this.dataSource.transaction(async (manager) => {
+      const order = await manager.findOne(Order, {
+        where: { id: orderId, branchId },
+        relations: { table: true, items: { product: true } },
+        lock: { mode: 'pessimistic_write', tables: ['orders'] },
+      });
+      if (!order) throw new NotFoundException('Order not found');
+      if (order.status === OrderStatus.CANCELLED) {
+        throw new ConflictException('Order is already cancelled');
+      }
+      if (order.status === OrderStatus.PAID) {
+        throw new ConflictException('Cannot cancel a paid order');
+      }
+      await manager.update(Order, orderId, { status: OrderStatus.CANCELLED });
+      order.status = OrderStatus.CANCELLED;
+      return this.toStaffOrderView(order);
+    });
+  }
+
+  /** Mark order as paid. */
+  async pay(branchId: string, orderId: string, paymentMethod: 'cash' | 'qr_manual'): Promise<StaffOrderView> {
+    return this.dataSource.transaction(async (manager) => {
+      const order = await manager.findOne(Order, {
+        where: { id: orderId, branchId },
+        relations: { table: true, items: { product: true } },
+        lock: { mode: 'pessimistic_write', tables: ['orders'] },
+      });
+      if (!order) throw new NotFoundException('Order not found');
+      if (order.status === OrderStatus.CANCELLED) {
+        throw new ConflictException('Cannot pay for a cancelled order');
+      }
+      if (order.status === OrderStatus.PAID) {
+        throw new ConflictException('Order is already paid');
+      }
+      await manager.update(Order, orderId, {
+        status: OrderStatus.PAID,
+        paymentMethod: paymentMethod as any,
+        paidAt: new Date(),
+      });
+      order.status = OrderStatus.PAID;
+      order.paymentMethod = paymentMethod as any;
+      order.paidAt = new Date();
+      return this.toStaffOrderView(order);
+    });
+  }
+
   /** Sets how many units of an item were delivered to the table. */
   async setServed(
     branchId: string,
@@ -156,5 +227,25 @@ export class OrdersService {
       await manager.update(OrderItem, item.id, { servedQuantity });
       return { id: item.id, quantity: item.quantity, servedQuantity };
     });
+  }
+
+  private toStaffOrderView(order: Order): StaffOrderView {
+    return {
+      id: order.id,
+      status: order.status,
+      tableId: order.tableId,
+      tableName: order.table?.name ?? null,
+      total: order.total,
+      createdAt: order.createdAt,
+      confirmedAt: order.confirmedAt,
+      items: order.items.map((i) => ({
+        id: i.id,
+        productId: i.productId,
+        name: i.product.name,
+        quantity: i.quantity,
+        servedQuantity: i.servedQuantity,
+        notes: i.notes,
+      })),
+    };
   }
 }

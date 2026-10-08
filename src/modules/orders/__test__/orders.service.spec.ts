@@ -136,10 +136,10 @@ describe('OrdersService.createOrder', () => {
       tableId: 't1',
       table: { id: 't1', name: 'Table 1' },
       createdByUserId: 'u1',
-      status: OrderStatus.PENDING_CONFIRMATION,
+      status: OrderStatus.CONFIRMED,
       total: 30000,
       createdAt: new Date(),
-      confirmedAt: null,
+      confirmedAt: new Date(),
       items: [
         { id: 'i1', productId: 'p1', product: mockProducts[0], quantity: 1, unitPrice: 10000, notes: null, servedQuantity: 0 },
         { id: 'i2', productId: 'p2', product: mockProducts[1], quantity: 1, unitPrice: 20000, notes: null, servedQuantity: 0 },
@@ -158,7 +158,8 @@ describe('OrdersService.createOrder', () => {
     expect(manager.findOne).toHaveBeenCalled();
     expect(manager.find).toHaveBeenCalled();
     expect(result).toBeDefined();
-    expect(result.status).toBe(OrderStatus.PENDING_CONFIRMATION);
+    expect(result.status).toBe(OrderStatus.CONFIRMED);
+    expect(result.confirmedAt).toBeDefined();
     expect(result.items.length).toBe(2);
   });
 
@@ -209,10 +210,10 @@ describe('OrdersService.createOrder', () => {
       tableId: 't1',
       table: { id: 't1', name: 'Table 1' },
       createdByUserId: 'u1',
-      status: OrderStatus.PENDING_CONFIRMATION,
+      status: OrderStatus.CONFIRMED,
       total: 50000,
       createdAt: new Date(),
-      confirmedAt: null,
+      confirmedAt: new Date(),
       items: [
         {
           id: 'i1',
@@ -236,6 +237,7 @@ describe('OrdersService.createOrder', () => {
     const result = await service.createOrder('b1', 'u1', dto);
 
     expect(result).toBeDefined();
+    expect(result.status).toBe(OrderStatus.CONFIRMED);
     expect(result.items).toHaveLength(1);
     expect(result.items[0].quantity).toBe(5);
   });
@@ -258,10 +260,10 @@ describe('OrdersService.createOrder', () => {
       tableId: 't1',
       table: { id: 't1', name: 'Table 1' },
       createdByUserId: 'u1',
-      status: OrderStatus.PENDING_CONFIRMATION,
+      status: OrderStatus.CONFIRMED,
       total: 40000,
       createdAt: new Date(),
-      confirmedAt: null,
+      confirmedAt: new Date(),
       items: [
         {
           id: 'i1',
@@ -294,6 +296,7 @@ describe('OrdersService.createOrder', () => {
     const result = await service.createOrder('b1', 'u1', dto);
 
     expect(result.total).toBe(40000);
+    expect(result.status).toBe(OrderStatus.CONFIRMED);
   });
 
   it('sets createdByUserId to track staff-created orders', async () => {
@@ -347,13 +350,13 @@ describe('OrdersService.createOrder', () => {
 
     const mockOrderData = {
       id: 'o1',
-      status: OrderStatus.PENDING_CONFIRMATION,
+      status: OrderStatus.CONFIRMED,
       tableId: 't1',
       table: { id: 't1', name: 'Table 1', branchId: 'b1' },
       createdByUserId: 'u1',
       total: 10000,
       createdAt: new Date('2026-10-08'),
-      confirmedAt: null,
+      confirmedAt: new Date('2026-10-08'),
       items: [
         {
           id: 'i1',
@@ -380,7 +383,8 @@ describe('OrdersService.createOrder', () => {
     });
 
     expect(result).toBeDefined();
-    expect(result.status).toBe(OrderStatus.PENDING_CONFIRMATION);
+    expect(result.status).toBe(OrderStatus.CONFIRMED);
+    expect(result.confirmedAt).toBeDefined();
     expect(result.tableId).toBe('t1');
     expect(result.total).toBe(10000);
     expect(result.items).toHaveLength(1);
