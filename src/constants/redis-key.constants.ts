@@ -4,4 +4,5 @@ export const REDIS_KEY = {
   AUTH_USER_SESSIONS: 'auth:user-sessions',
   THROTTLE: 'throttle',
   ATTENDANCE_FACE_QUEUE: 'attendance:face-queue',
+  GUEST_MENU: 'guest:menu',
 };
