@@ -36,6 +36,7 @@ const imageUpload = FileInterceptor(IMAGE_FIELD, {
 export class ProductsController {
   constructor(private readonly products: ProductsService) {}
 
+  @Roles(UserRole.ADMIN, UserRole.STAFF)
   @Get()
   list(@CurrentUser() user: AuthUser, @Query() query: ListProductsQuery) {
     return this.products.list(user.branchId, query.categoryId);

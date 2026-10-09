@@ -24,8 +24,13 @@ function build(opts: { found?: unknown; categoryExists?: boolean; removeError?: 
     keyFromPublicUrl: (url: string) =>
       url.startsWith(`${MEDIA}/`) ? url.slice(MEDIA.length + 1) : null,
   };
+
+  const guestService = {
+    revalidateMenuCache: vi.fn().mockResolvedValue(undefined),
+  };
+
   return {
-    service: new ProductsService(products as never, categories as never, s3 as never),
+    service: new ProductsService(products as never, categories as never, s3 as never, guestService as never),
     products,
     categories,
     s3,
