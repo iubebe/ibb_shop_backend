@@ -8,12 +8,14 @@ import { Repository } from 'typeorm';
 import { Category } from '../../database/entities/category.entity.js';
 import { Product } from '../../database/entities/product.entity.js';
 import type { CategoryView } from './categories.types.js';
+import { GuestService } from '../guest/guest.service.js';
 
 /** Admin CRUD for menu categories, always scoped to the user's branch. */
 @Injectable()
 export class CategoriesService {
   constructor(
     @InjectRepository(Category) private readonly categories: Repository<Category>,
+    private readonly guestService: GuestService,
   ) {}
 
   async list(branchId: string): Promise<CategoryView[]> {
@@ -36,6 +38,7 @@ export class CategoriesService {
     const saved = await this.categories.save(
       this.categories.create({ branchId, name }),
     );
+    await this.guestService.revalidateMenuCache(branchId);
     return view(saved, 0);
   }
 
@@ -49,6 +52,7 @@ export class CategoriesService {
       await this.assertNameFree(branchId, patch.name, id);
       category.name = patch.name;
       await this.categories.save(category);
+      await this.guestService.revalidateMenuCache(branchId);
     }
     return view(category, await this.countProducts(id));
   }
@@ -57,6 +61,7 @@ export class CategoriesService {
   async remove(branchId: string, id: string): Promise<void> {
     const category = await this.find(branchId, id);
     await this.categories.remove(category);
+    await this.guestService.revalidateMenuCache(branchId);
   }
 
   private async find(branchId: string, id: string) {

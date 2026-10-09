@@ -11,7 +11,10 @@ function build(opts: { found?: unknown; clash?: unknown } = {}) {
     remove: vi.fn().mockResolvedValue(undefined),
     manager: { countBy: vi.fn().mockResolvedValue(3) },
   };
-  return { service: new CategoriesService(repo as never), repo };
+  const guestService = {
+    revalidateMenuCache: vi.fn().mockResolvedValue(undefined),
+  };
+  return { service: new CategoriesService(repo as never, guestService as never), repo };
 }
 
 describe('CategoriesService', () => {

@@ -13,6 +13,7 @@ import { S3Service } from '../../s3/s3.service.js';
 import { detectImage } from './product-image.js';
 import type { CreateProductDto, UpdateProductDto } from './dto/product.dto.js';
 import type { ProductView } from './products.types.js';
+import { GuestService } from '../guest/guest.service.js';
 
 /** Postgres foreign_key_violation. */
 const FK_VIOLATION = '23503';
@@ -24,6 +25,7 @@ export class ProductsService {
     @InjectRepository(Product) private readonly products: Repository<Product>,
     @InjectRepository(Category) private readonly categories: Repository<Category>,
     private readonly s3: S3Service,
+    private readonly guestService: GuestService,
   ) {}
 
   async list(branchId: string, categoryId?: string): Promise<ProductView[]> {
@@ -46,6 +48,7 @@ export class ProductsService {
         isActive: dto.isActive ?? true,
       }),
     );
+    await this.guestService.revalidateMenuCache(branchId);
     return view(saved);
   }
 
@@ -68,6 +71,7 @@ export class ProductsService {
     if (dto.imageUrl !== undefined && oldImageUrl !== saved.imageUrl) {
       await this.deleteStoredImage(oldImageUrl);
     }
+    await this.guestService.revalidateMenuCache(branchId);
     return view(saved);
   }
 
@@ -108,6 +112,7 @@ export class ProductsService {
     try {
       await this.products.remove(product);
       await this.deleteStoredImage(imageUrl);
+      await this.guestService.revalidateMenuCache(branchId);
     } catch (err) {
       if (
         err instanceof QueryFailedError &&

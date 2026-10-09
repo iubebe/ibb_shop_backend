@@ -11,6 +11,8 @@ import { OrderItem } from '../../database/entities/order-item.entity.js';
 import { Order } from '../../database/entities/order.entity.js';
 import { Product } from '../../database/entities/product.entity.js';
 import { OrderStatus } from '../../database/enums.js';
+import { REDIS_KEY } from '../../constants/redis-key.constants.js';
+import { RedisService } from '../../redis/redis.service.js';
 import type { CreateOrderDto } from './dto/create-order.dto.js';
 import type {
   GuestMenuView,
@@ -20,6 +22,9 @@ import type {
 
 /** Orders a guest can still see for their table (not paid or cancelled). */
 const OPEN_STATUSES = [OrderStatus.PENDING_CONFIRMATION, OrderStatus.CONFIRMED];
+
+/** Menu cache TTL: 30 minutes. */
+const MENU_CACHE_TTL_SECONDS = 30 * 60;
 
 /** Guest-facing reads and order submission, scoped by the table's `qrToken`. */
 @Injectable()
@@ -34,6 +39,7 @@ export class GuestService {
     @InjectRepository(Order)
     private readonly orders: Repository<Order>,
     private readonly dataSource: DataSource,
+    private readonly redis: RedisService,
   ) {}
 
   async getTable(qrToken: string): Promise<GuestTableView> {
@@ -43,6 +49,11 @@ export class GuestService {
 
   async getMenu(qrToken: string): Promise<GuestMenuView> {
     const { branchId } = await this.findTable(qrToken);
+    const cacheKey = this.getMenuCacheKey(branchId);
+
+    const cached = await this.redis.getJson<GuestMenuView>(cacheKey);
+    if (cached) return cached;
+
     const [categories, products] = await Promise.all([
       this.categories.find({
         where: { branchId },
@@ -53,7 +64,7 @@ export class GuestService {
         order: { createdAt: 'ASC' },
       }),
     ]);
-    return {
+    const menu: GuestMenuView = {
       categories: categories.map((c) => ({ id: c.id, name: c.name })),
       products: products.map((p) => ({
         id: p.id,
@@ -63,6 +74,8 @@ export class GuestService {
         imageUrl: p.imageUrl,
       })),
     };
+    await this.redis.setJson(cacheKey, menu, MENU_CACHE_TTL_SECONDS);
+    return menu;
   }
 
   async listOrders(qrToken: string): Promise<GuestOrderView[]> {
@@ -131,6 +144,16 @@ export class GuestService {
       return created;
     });
     return toOrderView(order);
+  }
+
+  /** Invalidate menu cache for a branch (call after product/category changes). */
+  async revalidateMenuCache(branchId: string): Promise<void> {
+    const cacheKey = this.getMenuCacheKey(branchId);
+    await this.redis.del(cacheKey);
+  }
+
+  private getMenuCacheKey(branchId: string): string {
+    return `${REDIS_KEY.GUEST_MENU}:${branchId}`;
   }
 
   private async findTable(qrToken: string): Promise<DiningTable> {
