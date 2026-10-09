@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/iubebe/ibb_shop_backend/compare/ibb_shop_backend-v0.1.1...ibb_shop_backend-v0.2.0) (2026-10-09)
+
+
+### Features
+
+* order by table control ([c1f793c](https://github.com/iubebe/ibb_shop_backend/commit/c1f793ca4978afea9bd547bcac345f1da1ca30a0))
+
 ## [0.1.1](https://github.com/iubebe/ibb_shop_backend/compare/ibb_shop_backend-v0.1.0...ibb_shop_backend-v0.1.1) (2026-10-07)
 
 
