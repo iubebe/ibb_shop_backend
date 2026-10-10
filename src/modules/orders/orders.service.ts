@@ -10,6 +10,7 @@ import { DiningTable } from '../../database/entities/dining-table.entity.js';
 import { OrderItem } from '../../database/entities/order-item.entity.js';
 import { Order } from '../../database/entities/order.entity.js';
 import { Product } from '../../database/entities/product.entity.js';
+import { PaymentQrCode } from '../../database/entities/payment-qr-code.entity.js';
 import { OrderStatus } from '../../database/enums.js';
 import type { CreateOrderStaffDto } from './dto/create-order-staff.dto.js';
 import type { ServedItemView, StaffOrderView } from './orders.types.js';
@@ -21,6 +22,7 @@ export class OrdersService {
     @InjectRepository(Order) private readonly orders: Repository<Order>,
     @InjectRepository(DiningTable) private readonly tables: Repository<DiningTable>,
     @InjectRepository(Product) private readonly products: Repository<Product>,
+    @InjectRepository(PaymentQrCode) private readonly qrCodes: Repository<PaymentQrCode>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -198,6 +200,14 @@ export class OrdersService {
       order.paymentMethod = paymentMethod as any;
       order.paidAt = new Date();
       return this.toStaffOrderView(order);
+    });
+  }
+
+  /** Get active payment QR codes for a branch. */
+  async getPaymentQrCodes(branchId: string) {
+    return this.qrCodes.find({
+      where: { branchId, isActive: true },
+      order: { createdAt: 'ASC' },
     });
   }
 

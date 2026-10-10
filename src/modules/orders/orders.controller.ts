@@ -50,7 +50,7 @@ export class OrdersController {
   }
 
   /** Mark order as paid. */
-  @Roles(UserRole.ADMIN, UserRole.CASHIER)
+  @Roles(UserRole.ADMIN, UserRole.STAFF, UserRole.CASHIER)
   @Post(':orderId/pay')
   pay(
     @CurrentUser() user: AuthUser,
@@ -58,6 +58,12 @@ export class OrdersController {
     @Body() dto: { paymentMethod: 'cash' | 'qr_manual' },
   ) {
     return this.orders.pay(user.branchId, orderId, dto.paymentMethod);
+  }
+
+  /** Get payment QR codes for the user's branch. */
+  @Get('payment-qr-codes')
+  getPaymentQrCodes(@CurrentUser() user: AuthUser) {
+    return this.orders.getPaymentQrCodes(user.branchId);
   }
 
   /** Staff marks how many units were delivered to the table. */
