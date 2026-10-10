@@ -1,9 +1,25 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
-import { Repository } from 'typeorm'
+import { IsNull, Not, Repository } from 'typeorm'
 import { StaffSchedule } from '../../database/entities/staff-schedule.entity.js'
 import { StaffShiftRegistration } from '../../database/entities/staff-shift-registration.entity.js'
-import type { CreateStaffScheduleDto, UpdateStaffScheduleDto } from './dto/staff-schedules.dto.js'
+import type { CreateStaffScheduleDto, ProposeStaffShiftsDto, UpdateStaffScheduleDto } from './dto/staff-schedules.dto.js'
+
+/** Who is asking. Staff see open shifts plus their own proposals; admins see everything. */
+export interface ScheduleViewer {
+  id: string
+  isAdmin: boolean
+}
+
+const PROPOSED = 'proposed'
+const REJECTED = 'rejected'
+const SCHEDULED = 'scheduled'
+
+function isHiddenFrom(schedule: StaffSchedule, viewer: ScheduleViewer): boolean {
+  if (viewer.isAdmin) return false
+  if (schedule.status !== PROPOSED && schedule.status !== REJECTED) return false
+  return schedule.proposedByUserId !== viewer.id
+}
 
 @Injectable()
 export class StaffSchedulesService {
@@ -24,7 +40,7 @@ export class StaffSchedulesService {
         endTime: shift.endTime,
         shiftType: shift.shiftType,
         position: shift.position,
-        status: 'scheduled',
+        status: SCHEDULED,
       })
       created.push(await this.schedules.save(schedule))
     }
@@ -32,21 +48,91 @@ export class StaffSchedulesService {
     return created
   }
 
-  async listSchedulesByWeek(branchId: string, weekStartDate: string): Promise<StaffSchedule[]> {
-    return this.schedules.find({
+  async listSchedulesByWeek(
+    branchId: string,
+    weekStartDate: string,
+    viewer?: ScheduleViewer,
+  ): Promise<StaffSchedule[]> {
+    const schedules = await this.schedules.find({
       where: { branchId, weekStartDate },
       relations: { assignedToUser: true, registrations: { staffUser: true } },
       order: { dayOfWeek: 'ASC', startTime: 'ASC' },
     })
+    return viewer ? schedules.filter((s) => !isHiddenFrom(s, viewer)) : schedules
   }
 
-  async getSchedule(branchId: string, scheduleId: string): Promise<StaffSchedule> {
+  async getSchedule(branchId: string, scheduleId: string, viewer?: ScheduleViewer): Promise<StaffSchedule> {
     const schedule = await this.schedules.findOne({
       where: { id: scheduleId, branchId },
       relations: { assignedToUser: true, registrations: { staffUser: true } },
     })
-    if (!schedule) throw new NotFoundException('Schedule not found')
+    if (!schedule || (viewer && isHiddenFrom(schedule, viewer))) {
+      throw new NotFoundException('Schedule not found')
+    }
     return schedule
+  }
+
+  /** Staff suggestion. Stored as `proposed`: not open for registration until an admin approves it. */
+  async proposeShifts(branchId: string, userId: string, dto: ProposeStaffShiftsDto): Promise<StaffSchedule[]> {
+    const created: StaffSchedule[] = []
+    for (const shift of dto.shifts) {
+      const schedule = this.schedules.create({
+        branchId,
+        weekStartDate: dto.weekStartDate,
+        dayOfWeek: shift.dayOfWeek,
+        startTime: shift.startTime,
+        endTime: shift.endTime,
+        shiftType: shift.shiftType ?? null,
+        position: shift.position ?? null,
+        status: PROPOSED,
+        proposedByUserId: userId,
+      })
+      created.push(await this.schedules.save(schedule))
+    }
+    return created
+  }
+
+  /** Admin queue: every proposal in the week, whatever its review state. */
+  async listProposalsByWeek(branchId: string, weekStartDate: string): Promise<StaffSchedule[]> {
+    return this.schedules.find({
+      where: { branchId, weekStartDate, proposedByUserId: Not(IsNull()) },
+      relations: { proposedByUser: true, reviewedByUser: true },
+      order: { createdAt: 'ASC' },
+    })
+  }
+
+  /** A staff member's own proposals for the week. */
+  async listMyProposals(branchId: string, userId: string, weekStartDate: string): Promise<StaffSchedule[]> {
+    return this.schedules.find({
+      where: { branchId, weekStartDate, proposedByUserId: userId },
+      order: { dayOfWeek: 'ASC', startTime: 'ASC' },
+    })
+  }
+
+  async approveProposal(branchId: string, scheduleId: string, adminUserId: string, notes?: string): Promise<StaffSchedule> {
+    return this.reviewProposal(branchId, scheduleId, adminUserId, SCHEDULED, notes)
+  }
+
+  async rejectProposal(branchId: string, scheduleId: string, adminUserId: string, notes?: string): Promise<StaffSchedule> {
+    return this.reviewProposal(branchId, scheduleId, adminUserId, REJECTED, notes)
+  }
+
+  private async reviewProposal(
+    branchId: string,
+    scheduleId: string,
+    adminUserId: string,
+    nextStatus: typeof SCHEDULED | typeof REJECTED,
+    notes?: string,
+  ): Promise<StaffSchedule> {
+    const schedule = await this.getSchedule(branchId, scheduleId)
+    if (schedule.status !== PROPOSED) {
+      throw new ConflictException('Only proposed shifts can be reviewed')
+    }
+    schedule.status = nextStatus
+    schedule.reviewedByUserId = adminUserId
+    schedule.reviewedAt = new Date()
+    schedule.reviewNotes = notes?.trim() || null
+    return this.schedules.save(schedule)
   }
 
   async updateSchedule(
@@ -75,7 +161,7 @@ export class StaffSchedulesService {
   async registerForShift(branchId: string, scheduleId: string, staffUserId: string): Promise<StaffShiftRegistration> {
     const schedule = await this.getSchedule(branchId, scheduleId)
 
-    if (schedule.status !== 'scheduled') {
+    if (schedule.status !== SCHEDULED) {
       throw new BadRequestException('Cannot register for cancelled or unavailable shift')
     }
 

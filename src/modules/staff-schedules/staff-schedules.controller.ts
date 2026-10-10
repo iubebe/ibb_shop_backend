@@ -12,8 +12,18 @@ import type { AuthUser } from '../../auth/auth.types.js'
 import { CurrentUser } from '../../auth/decorators/current-user.decorator.js'
 import { Roles } from '../../auth/decorators/roles.decorator.js'
 import { UserRole } from '../../database/enums.js'
-import { ApproveRegistrationDto, CreateStaffScheduleDto, UpdateStaffScheduleDto } from './dto/staff-schedules.dto.js'
-import { StaffSchedulesService } from './staff-schedules.service.js'
+import {
+  ApproveRegistrationDto,
+  CreateStaffScheduleDto,
+  ProposeStaffShiftsDto,
+  ReviewProposalDto,
+  UpdateStaffScheduleDto,
+} from './dto/staff-schedules.dto.js'
+import { StaffSchedulesService, type ScheduleViewer } from './staff-schedules.service.js'
+
+function viewerOf(user: AuthUser): ScheduleViewer {
+  return { id: user.id, isAdmin: user.role === UserRole.ADMIN }
+}
 
 @Controller('staff-schedules')
 export class StaffSchedulesController {
@@ -33,7 +43,7 @@ export class StaffSchedulesController {
     @CurrentUser() user: AuthUser,
     @Query('weekStartDate') weekStartDate: string,
   ) {
-    return this.schedules.listSchedulesByWeek(user.branchId, weekStartDate)
+    return this.schedules.listSchedulesByWeek(user.branchId, weekStartDate, viewerOf(user))
   }
 
   /** Get a specific schedule */
@@ -43,7 +53,50 @@ export class StaffSchedulesController {
     @CurrentUser() user: AuthUser,
     @Param('scheduleId', ParseUUIDPipe) scheduleId: string,
   ) {
-    return this.schedules.getSchedule(user.branchId, scheduleId)
+    return this.schedules.getSchedule(user.branchId, scheduleId, viewerOf(user))
+  }
+
+  /** Staff: propose one or more shifts. They stay `proposed` until an admin approves them. */
+  @Roles(UserRole.STAFF)
+  @Post('proposals')
+  propose(@CurrentUser() user: AuthUser, @Body() dto: ProposeStaffShiftsDto) {
+    return this.schedules.proposeShifts(user.branchId, user.id, dto)
+  }
+
+  /** Admin: every proposal in the week (any review state) */
+  @Roles(UserRole.ADMIN)
+  @Get('proposals/by-week/:weekStartDate')
+  listProposals(@CurrentUser() user: AuthUser, @Param('weekStartDate') weekStartDate: string) {
+    return this.schedules.listProposalsByWeek(user.branchId, weekStartDate)
+  }
+
+  /** Staff: their own proposals for the week */
+  @Roles(UserRole.STAFF)
+  @Get('proposals/mine/:weekStartDate')
+  myProposals(@CurrentUser() user: AuthUser, @Param('weekStartDate') weekStartDate: string) {
+    return this.schedules.listMyProposals(user.branchId, user.id, weekStartDate)
+  }
+
+  /** Admin: approve a proposal. It becomes an open shift (`scheduled`). */
+  @Roles(UserRole.ADMIN)
+  @Post('proposals/:scheduleId/approve')
+  approveProposal(
+    @CurrentUser() user: AuthUser,
+    @Param('scheduleId', ParseUUIDPipe) scheduleId: string,
+    @Body() dto: ReviewProposalDto,
+  ) {
+    return this.schedules.approveProposal(user.branchId, scheduleId, user.id, dto.notes)
+  }
+
+  /** Admin: reject a proposal. Staff can still see it, with the notes. */
+  @Roles(UserRole.ADMIN)
+  @Post('proposals/:scheduleId/reject')
+  rejectProposal(
+    @CurrentUser() user: AuthUser,
+    @Param('scheduleId', ParseUUIDPipe) scheduleId: string,
+    @Body() dto: ReviewProposalDto,
+  ) {
+    return this.schedules.rejectProposal(user.branchId, scheduleId, user.id, dto.notes)
   }
 
   /** Admin: Update a schedule */

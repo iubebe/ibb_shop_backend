@@ -48,9 +48,31 @@ export class StaffSchedule extends BaseEntity {
   @Column({ type: 'varchar', length: 100, nullable: true })
   position: string | null
 
-  /** scheduled, cancelled, no-show */
+  /** proposed (staff suggestion, waiting for admin), scheduled (open for registration), rejected, cancelled, no-show */
   @Column({ type: 'varchar', length: 50, default: 'scheduled' })
   status: string
+
+  /** Staff member who proposed the shift; null for admin-created shifts */
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  proposedByUserId: string | null
+
+  @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'proposedByUserId' })
+  proposedByUser: Relation<User> | null
+
+  @Column({ type: 'uuid', nullable: true })
+  reviewedByUserId: string | null
+
+  @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'reviewedByUserId' })
+  reviewedByUser: Relation<User> | null
+
+  @Column({ type: 'timestamptz', nullable: true })
+  reviewedAt: Date | null
+
+  @Column({ type: 'text', nullable: true })
+  reviewNotes: string | null
 
   /** Shift registrations from staff */
   @OneToMany(() => StaffShiftRegistration, (reg) => reg.schedule, { cascade: true })
