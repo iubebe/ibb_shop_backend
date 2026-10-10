@@ -86,6 +86,8 @@ export class StaffSchedulesService {
         position: shift.position ?? null,
         status: PROPOSED,
         proposedByUserId: userId,
+        // The proposer takes the shift; it stays theirs once an admin approves it.
+        assignedToUserId: userId,
       })
       created.push(await this.schedules.save(schedule))
     }
@@ -144,6 +146,7 @@ export class StaffSchedulesService {
     schedule.reviewedByUserId = adminUserId
     schedule.reviewedAt = new Date()
     schedule.reviewNotes = notes?.trim() || null
+    if (nextStatus === REJECTED) schedule.assignedToUserId = null
     return this.schedules.save(schedule)
   }
 

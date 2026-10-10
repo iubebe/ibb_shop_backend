@@ -53,7 +53,17 @@ describe('StaffSchedulesService.proposeShifts', () => {
       proposedByUserId: 'staffA',
       position: 'cashier',
       shiftType: null,
+      assignedToUserId: 'staffA',
     });
+  });
+
+  it('assigns each proposed shift to the proposer', async () => {
+    const ctx = build();
+    const created = await ctx.service.proposeShifts('b1', 'staffA', {
+      weekStartDate: '2026-10-12',
+      shifts: [{ dayOfWeek: 4, startTime: '07:00', endTime: '11:00' }],
+    });
+    expect(created[0].assignedToUserId).toBe('staffA');
   });
 });
 
@@ -95,7 +105,7 @@ describe('StaffSchedulesService visibility', () => {
 
 describe('StaffSchedulesService review', () => {
   it('approving a proposal makes it an open shift', async () => {
-    const ctx = build([], shift({ status: 'proposed', proposedByUserId: 'staffA' }));
+    const ctx = build([], shift({ status: 'proposed', proposedByUserId: 'staffA', assignedToUserId: 'staffA' }));
 
     const approved = await ctx.service.approveProposal('b1', 's1', 'admin1', '  ok  ');
 
@@ -105,6 +115,7 @@ describe('StaffSchedulesService review', () => {
       reviewNotes: 'ok',
     });
     expect(approved.reviewedAt).toBeInstanceOf(Date);
+    expect(approved.assignedToUserId).toBe('staffA');
   });
 
   it('rejecting a proposal keeps it visible to the proposer with the notes', async () => {
@@ -112,7 +123,7 @@ describe('StaffSchedulesService review', () => {
 
     const rejected = await ctx.service.rejectProposal('b1', 's1', 'admin1', 'trùng ca khác');
 
-    expect(rejected).toMatchObject({ status: 'rejected', reviewNotes: 'trùng ca khác' });
+    expect(rejected).toMatchObject({ status: 'rejected', reviewNotes: 'trùng ca khác', assignedToUserId: null });
   });
 
   it('only proposed shifts can be reviewed', async () => {
