@@ -19,6 +19,8 @@ import { OrdersModule } from './modules/orders/orders.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 import { AttendanceModule } from './modules/attendance/attendance.module.js';
 import { TablesModule } from './modules/tables/tables.module.js';
+import { StaffSchedulesModule } from './modules/staff-schedules/staff-schedules.module.js';
+import { PaymentQrCodesModule } from './modules/payment-qr-codes/payment-qr-codes.module.js';
 
 @Module({
   imports: [
@@ -31,12 +33,14 @@ import { TablesModule } from './modules/tables/tables.module.js';
     AuthModule,
     GuestModule,
     OrdersModule,
+    PaymentQrCodesModule,
     CategoriesModule,
     DashboardModule,
     ProductsModule,
     UsersModule,
     AttendanceModule,
     TablesModule,
+    StaffSchedulesModule,
     VersionModule,
   ],
   controllers: [AppController, HealthController],

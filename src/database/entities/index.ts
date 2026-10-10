@@ -7,6 +7,8 @@ import { OrderItem } from './order-item.entity.js';
 import { Order } from './order.entity.js';
 import { PaymentQrCode } from './payment-qr-code.entity.js';
 import { Product } from './product.entity.js';
+import { StaffSchedule } from './staff-schedule.entity.js';
+import { StaffShiftRegistration } from './staff-shift-registration.entity.js';
 import { StockMovement } from './stock-movement.entity.js';
 import { User } from './user.entity.js';
 
@@ -20,6 +22,8 @@ export {
   OrderItem,
   PaymentQrCode,
   Product,
+  StaffSchedule,
+  StaffShiftRegistration,
   StockMovement,
   User,
 };
@@ -36,4 +40,6 @@ export const entities = [
   Order,
   OrderItem,
   AttendanceRecord,
+  StaffSchedule,
+  StaffShiftRegistration,
 ];
