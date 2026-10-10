@@ -15,7 +15,7 @@ function build(item: unknown) {
   const dataSource = {
     transaction: vi.fn((cb: (m: typeof manager) => unknown) => cb(manager)),
   };
-  const service = new OrdersService({} as never, {} as never, {} as never, dataSource as never);
+  const service = new OrdersService({} as never, {} as never, {} as never, {} as never, dataSource as never);
   return { service, manager };
 }
 
@@ -65,11 +65,13 @@ function buildCreateOrder() {
   const ordersRepo = {} as never;
   const tablesRepo = {} as never;
   const productsRepo = {} as never;
+  const qrCodesRepo = {} as never;
 
   const service = new OrdersService(
     ordersRepo,
     tablesRepo,
     productsRepo,
+    qrCodesRepo,
     dataSource as never,
   );
 
