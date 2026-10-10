@@ -99,6 +99,16 @@ export class StaffSchedulesController {
     return this.schedules.rejectProposal(user.branchId, scheduleId, user.id, dto.notes)
   }
 
+  /** Staff: cancel their own proposal */
+  @Roles(UserRole.STAFF)
+  @Post('proposals/:scheduleId/cancel')
+  cancelProposal(
+    @CurrentUser() user: AuthUser,
+    @Param('scheduleId', ParseUUIDPipe) scheduleId: string,
+  ) {
+    return this.schedules.cancelProposal(user.branchId, scheduleId, user.id)
+  }
+
   /** Admin: Update a schedule */
   @Roles(UserRole.ADMIN)
   @Put(':scheduleId')

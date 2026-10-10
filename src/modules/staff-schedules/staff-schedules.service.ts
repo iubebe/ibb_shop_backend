@@ -117,6 +117,18 @@ export class StaffSchedulesService {
     return this.reviewProposal(branchId, scheduleId, adminUserId, REJECTED, notes)
   }
 
+  async cancelProposal(branchId: string, scheduleId: string, userId: string): Promise<StaffSchedule> {
+    const schedule = await this.getSchedule(branchId, scheduleId)
+    if (schedule.status !== PROPOSED) {
+      throw new ConflictException('Only proposed shifts can be cancelled')
+    }
+    if (schedule.proposedByUserId !== userId) {
+      throw new ConflictException('You can only cancel your own proposals')
+    }
+    schedule.status = 'cancelled'
+    return this.schedules.save(schedule)
+  }
+
   private async reviewProposal(
     branchId: string,
     scheduleId: string,
