@@ -8,7 +8,7 @@ export interface S3Options {
   /** Default bucket used when a method is not given one. */
   bucket: string;
   /**
-   * Base URL browsers use to read objects (e.g. `http://localhost:9000/ibb-media`
+   * Base URL browsers use to read objects (e.g. `http://localhost:9000/products`
    * or a CDN / reverse-proxy path). Defaults to `<endpoint>/<bucket>`.
    */
   publicUrl: string;

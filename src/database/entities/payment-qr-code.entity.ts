@@ -17,7 +17,7 @@ export class PaymentQrCode extends BaseEntity {
   @Column()
   label: string;
 
-  /** Public S3 URL of the uploaded image (column name kept for the existing API contract). */
+  /** S3 key of the uploaded image (column name kept for the existing API contract). */
   @Column()
   imagePath: string;
 

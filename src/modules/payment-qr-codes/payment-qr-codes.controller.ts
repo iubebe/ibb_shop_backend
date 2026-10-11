@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Redirect,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
@@ -72,6 +73,15 @@ export class PaymentQrCodesController {
     @UploadedFile() image?: UploadedImage,
   ) {
     return this.qrCodes.replaceImage(user.branchId, id, image?.buffer);
+  }
+
+  /** Redirects to a presigned URL for downloading the QR image (private, requires auth). */
+  @Get(':id/image')
+  @Roles(UserRole.ADMIN, UserRole.STAFF, UserRole.CASHIER)
+  @Redirect()
+  async getImage(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    const url = await this.qrCodes.getImagePresignedUrl(user.branchId, id);
+    return { url };
   }
 
   @Delete(':id')

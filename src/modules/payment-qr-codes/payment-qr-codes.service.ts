@@ -21,10 +21,10 @@ export class PaymentQrCodesService {
 
   /** Stores the image in S3 first, then the row. If the row write fails, the object is removed again. */
   async create(branchId: string, label: string, buffer: Buffer | undefined): Promise<PaymentQrCode> {
-    const { url, key } = await this.storeImage(branchId, buffer);
+    const { key } = await this.storeImage(branchId, buffer);
     try {
       return await this.qrCodes.save(
-        this.qrCodes.create({ branchId, label, imagePath: url, isActive: true }),
+        this.qrCodes.create({ branchId, label, imagePath: key, isActive: true }),
       );
     } catch (err) {
       await this.deleteObject(key);
@@ -41,12 +41,12 @@ export class PaymentQrCodesService {
 
   async replaceImage(branchId: string, id: string, buffer: Buffer | undefined): Promise<PaymentQrCode> {
     const qr = await this.find(branchId, id);
-    const oldUrl = qr.imagePath;
-    const { url, key } = await this.storeImage(branchId, buffer);
+    const oldKey = qr.imagePath;
+    const { key } = await this.storeImage(branchId, buffer);
     try {
-      qr.imagePath = url;
+      qr.imagePath = key;
       const saved = await this.qrCodes.save(qr);
-      await this.deleteObject(this.s3.keyFromPublicUrl(oldUrl));
+      await this.deleteObject(oldKey);
       return saved;
     } catch (err) {
       await this.deleteObject(key);
@@ -57,7 +57,12 @@ export class PaymentQrCodesService {
   async remove(branchId: string, id: string): Promise<void> {
     const qr = await this.find(branchId, id);
     await this.qrCodes.remove(qr);
-    await this.deleteObject(this.s3.keyFromPublicUrl(qr.imagePath));
+    await this.deleteObject(qr.imagePath);
+  }
+
+  async getImagePresignedUrl(branchId: string, id: string, expiresInSeconds = 3600): Promise<string> {
+    const qr = await this.find(branchId, id);
+    return this.s3.getPresignedGetUrl(qr.imagePath, expiresInSeconds);
   }
 
   private async find(branchId: string, id: string): Promise<PaymentQrCode> {
@@ -68,13 +73,13 @@ export class PaymentQrCodesService {
 
   private async storeImage(branchId: string, buffer: Buffer | undefined) {
     const { ext, contentType } = detectImage(buffer);
-    const key = `payment-qr/${branchId}/${randomUUID()}.${ext}`;
-    const { url } = await this.s3.upload(key, buffer!, {
+    const key = `${branchId}/${randomUUID()}.${ext}`;
+    await this.s3.upload(key, buffer!, {
       contentType,
-      // Keys are unique per upload, so the object never changes.
-      cacheControl: 'public, max-age=31536000, immutable',
+      cacheControl: 'private, max-age=31536000, immutable',
+      bucket: 'payment-qr',
     });
-    return { key, url };
+    return { key };
   }
 
   private async deleteObject(key: string | null): Promise<void> {
