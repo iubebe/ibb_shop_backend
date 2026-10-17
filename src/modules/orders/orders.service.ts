@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository } from 'typeorm';
+import { And, DataSource, In, LessThan, MoreThanOrEqual, Repository } from 'typeorm';
 import { DiningTable } from '../../database/entities/dining-table.entity.js';
 import { OrderItem } from '../../database/entities/order-item.entity.js';
 import { Order } from '../../database/entities/order.entity.js';
@@ -52,6 +52,19 @@ export class OrdersService {
         notes: i.notes,
       })),
     }));
+  }
+
+  /** Every order created in `[from, to)`, newest first. Admin review by day. */
+  async history(branchId: string, from: Date, to: Date): Promise<StaffOrderView[]> {
+    if (!(from < to)) {
+      throw new BadRequestException('`from` must be before `to`');
+    }
+    const orders = await this.orders.find({
+      where: { branchId, createdAt: And(MoreThanOrEqual(from), LessThan(to)) },
+      relations: { table: true, items: { product: true } },
+      order: { createdAt: 'DESC' },
+    });
+    return orders.map((o) => this.toStaffOrderView(o));
   }
 
   async createOrder(

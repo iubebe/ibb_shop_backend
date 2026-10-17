@@ -393,3 +393,20 @@ describe('OrdersService.createOrder', () => {
     expect(result.items[0].productId).toBe('p1');
   });
 });
+
+describe('OrdersService.history', () => {
+  it('rejects an empty or inverted range', async () => {
+    const service = new OrdersService({} as never, {} as never, {} as never, {} as never, {} as never);
+    const d = new Date('2026-10-17T00:00:00Z');
+    await expect(service.history('b1', d, d)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('queries the branch and range newest first', async () => {
+    const find = vi.fn().mockResolvedValue([]);
+    const service = new OrdersService({ find } as never, {} as never, {} as never, {} as never, {} as never);
+    await service.history('b1', new Date('2026-10-17T00:00:00Z'), new Date('2026-10-18T00:00:00Z'));
+    expect(find).toHaveBeenCalledWith(
+      expect.objectContaining({ order: { createdAt: 'DESC' }, where: expect.objectContaining({ branchId: 'b1' }) }),
+    );
+  });
+});
