@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.0](https://github.com/iubebe/ibb_shop_backend/compare/ibb_shop_backend-v0.2.0...ibb_shop_backend-v0.3.0) (2026-10-17)
+
+
+### Features
+
+* order, finance, shift, stock and qrcode ([b9cc93d](https://github.com/iubebe/ibb_shop_backend/commit/b9cc93d07ef63cf3ea8703c95b3dc3263c3d8fd9))
+* order, finance, shift, stock and qrcode ([b9cc93d](https://github.com/iubebe/ibb_shop_backend/commit/b9cc93d07ef63cf3ea8703c95b3dc3263c3d8fd9))
+* order, finance, shift, stock and qrcode ([30ba2b1](https://github.com/iubebe/ibb_shop_backend/commit/30ba2b1526f3483b92ee340b251f38c750ae0afe))
+
 ## [0.2.0](https://github.com/iubebe/ibb_shop_backend/compare/ibb_shop_backend-v0.1.1...ibb_shop_backend-v0.2.0) (2026-10-09)
 
 
