@@ -22,21 +22,21 @@ function build(existing: any = null) {
 }
 
 describe('PaymentQrCodesService.create', () => {
-  it('uploads the image under the branch and saves an active row pointing at the URL', async () => {
+  it('uploads the image to the private bucket under the branch and saves an active row pointing at the key', async () => {
     const ctx = build();
 
     const saved = await ctx.service.create('b1', 'MoMo', JPEG);
 
     expect(ctx.s3.upload).toHaveBeenCalledWith(
-      expect.stringMatching(/^payment-qr\/b1\/[0-9a-f-]+\.jpg$/),
+      expect.stringMatching(/^b1\/[0-9a-f-]+\.jpg$/),
       JPEG,
-      expect.objectContaining({ contentType: 'image/jpeg' }),
+      expect.objectContaining({ contentType: 'image/jpeg', bucket: 'payment-qr' }),
     );
     expect(saved).toMatchObject({
       branchId: 'b1',
       label: 'MoMo',
       isActive: true,
-      imagePath: expect.stringMatching(/^https:\/\/media\.example\/payment-qr\/b1\//),
+      imagePath: expect.stringMatching(/^b1\/[0-9a-f-]+\.jpg$/),
     });
   });
 
@@ -79,23 +79,23 @@ describe('PaymentQrCodesService.update', () => {
 
 describe('PaymentQrCodesService.replaceImage', () => {
   it('stores the new image and deletes the old object', async () => {
-    const ctx = build({ id: 'qr1', branchId: 'b1', label: 'MoMo', isActive: true, imagePath: 'https://media.example/payment-qr/b1/old.png' });
+    const ctx = build({ id: 'qr1', branchId: 'b1', label: 'MoMo', isActive: true, imagePath: 'b1/old.png' });
 
     const saved = await ctx.service.replaceImage('b1', 'qr1', JPEG);
 
     expect(saved.imagePath).toMatch(/\.jpg$/);
-    expect(ctx.s3.delete).toHaveBeenCalledWith('payment-qr/b1/old.png');
+    expect(ctx.s3.delete).toHaveBeenCalledWith('b1/old.png');
   });
 });
 
 describe('PaymentQrCodesService.remove', () => {
   it('removes the row and its S3 object', async () => {
-    const ctx = build({ id: 'qr1', branchId: 'b1', imagePath: 'https://media.example/payment-qr/b1/a.jpg' });
+    const ctx = build({ id: 'qr1', branchId: 'b1', imagePath: 'b1/a.jpg' });
 
     await ctx.service.remove('b1', 'qr1');
 
     expect(ctx.repo.remove).toHaveBeenCalled();
-    expect(ctx.s3.delete).toHaveBeenCalledWith('payment-qr/b1/a.jpg');
+    expect(ctx.s3.delete).toHaveBeenCalledWith('b1/a.jpg');
   });
 
   it('404s when the code does not exist', async () => {

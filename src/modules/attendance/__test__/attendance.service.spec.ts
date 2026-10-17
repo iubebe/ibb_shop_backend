@@ -60,7 +60,7 @@ describe('AttendanceService', () => {
       expect(s3.upload).toHaveBeenCalledWith(
         expect.stringMatching(/^attendance\/b1\/u1\/.+-in\.jpg$/),
         jpeg,
-        { contentType: 'image/jpeg' },
+        { contentType: 'image/jpeg', bucket: 'attendances' },
       );
       expect(manager.save).toHaveBeenCalled();
       expect(queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({ kind: 'check-in', userId: 'u1' }));
