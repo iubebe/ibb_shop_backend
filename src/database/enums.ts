@@ -33,3 +33,14 @@ export enum FaceCheckStatus {
   PASSED = 'passed',
   FAILED = 'failed',
 }
+
+/** `goods` are bought and resold as-is; `material` is an ingredient/supply. */
+export enum StockItemKind {
+  GOODS = 'goods',
+  MATERIAL = 'material',
+}
+
+export enum StockItemMovementReason {
+  IMPORT = 'import',
+  ADJUSTMENT = 'adjustment',
+}
