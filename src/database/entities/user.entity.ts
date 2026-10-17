@@ -1,6 +1,7 @@
 import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
 import type { Relation } from 'typeorm';
 import { UserRole } from '../enums.js';
+import { numericTransformer } from '../transformers.js';
 import { BaseEntity } from './base.entity.js';
 import { Branch } from './branch.entity.js';
 
@@ -30,6 +31,16 @@ export class User extends BaseEntity {
   /** Set for seeded/admin-created accounts: must pick a new password at first login. */
   @Column({ default: false })
   mustChangePassword: boolean;
+
+  /** Pay per worked hour (VND); null = not set, so salary is not estimated. */
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+    transformer: numericTransformer,
+  })
+  hourlyRate: number | null;
 
   /** Disabled accounts cannot log in or refresh; their history is kept. */
   @Column({ default: true })

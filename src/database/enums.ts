@@ -44,3 +44,15 @@ export enum StockItemMovementReason {
   IMPORT = 'import',
   ADJUSTMENT = 'adjustment',
 }
+
+/** Operating-expense categories (salary and stock imports are tracked elsewhere). */
+export enum ExpenseCategory {
+  RENT = 'rent',
+  ELECTRICITY = 'electricity',
+  WATER = 'water',
+  INTERNET = 'internet',
+  GAS = 'gas',
+  MAINTENANCE = 'maintenance',
+  MARKETING = 'marketing',
+  OTHER = 'other',
+}

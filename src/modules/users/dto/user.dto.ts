@@ -3,9 +3,12 @@ import {
   IsBoolean,
   IsEmail,
   IsEnum,
+  IsNumber,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
+  Min,
   MinLength,
 } from 'class-validator';
 import { UserRole } from '../../../database/enums.js';
@@ -59,6 +62,13 @@ export class UpdateUserDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  /** VND per worked hour; `null` clears it. */
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(100_000_000)
+  hourlyRate?: number | null;
 }
 
 export class ResetPasswordDto {
