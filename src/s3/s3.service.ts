@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import {
   CreateBucketCommand,
   DeleteObjectCommand,
@@ -7,6 +7,7 @@ import {
   HeadBucketCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
+  PutBucketPolicyCommand,
   PutObjectCommand,
   type S3Client,
 } from '@aws-sdk/client-s3';
@@ -24,13 +25,18 @@ import type {
 } from './s3.types.js';
 
 @Injectable()
-export class S3Service {
+export class S3Service implements OnModuleInit {
   constructor(
     @Inject(S3_CLIENT) readonly client: S3Client,
     @Inject(S3_OPTIONS) readonly options: S3Options,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(S3Service.name);
+  }
+
+  async onModuleInit(): Promise<void> {
+    await this.ensureBucket();
+    await this.ensurePublicPolicy();
   }
 
   get defaultBucket(): string {
@@ -48,6 +54,27 @@ export class S3Service {
     await this.client.send(new CreateBucketCommand({ Bucket: bucket }));
     this.logger.info({ bucket }, 'S3 bucket created');
     return true;
+  }
+
+  /** Set bucket policy to allow anonymous read access to products/ prefix. Idempotent. */
+  private async ensurePublicPolicy(bucket = this.options.bucket): Promise<void> {
+    const policy = {
+      Version: '2012-10-17',
+      Statement: [{
+        Sid: 'PublicReadProducts',
+        Effect: 'Allow',
+        Principal: '*',
+        Action: ['s3:GetObject'],
+        Resource: [`arn:aws:s3:::${bucket}/products/*`],
+      }],
+    };
+    await this.client.send(
+      new PutBucketPolicyCommand({
+        Bucket: bucket,
+        Policy: JSON.stringify(policy),
+      }),
+    );
+    this.logger.info({ bucket }, 'S3 public policy for products/ ensured');
   }
 
   async upload(

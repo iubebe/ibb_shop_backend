@@ -20,6 +20,7 @@ interface UserPatch {
   email?: string;
   role?: UserRole;
   isActive?: boolean;
+  hourlyRate?: number | null;
 }
 
 /**
@@ -86,6 +87,7 @@ export class UsersService {
     if (patch.email !== undefined) user.email = patch.email;
     if (patch.role !== undefined) user.role = patch.role;
     if (patch.isActive !== undefined) user.isActive = patch.isActive;
+    if (patch.hourlyRate !== undefined) user.hourlyRate = patch.hourlyRate;
     const saved = await this.users.save(user);
 
     // The refresh path re-reads role and isActive, so ending sessions makes
@@ -156,6 +158,7 @@ function view(user: User): UserView {
     email: user.email,
     role: user.role,
     isActive: user.isActive,
+    hourlyRate: user.hourlyRate,
     mustChangePassword: user.mustChangePassword,
     createdAt: user.createdAt,
   };

@@ -15,7 +15,7 @@ function build(item: unknown) {
   const dataSource = {
     transaction: vi.fn((cb: (m: typeof manager) => unknown) => cb(manager)),
   };
-  const service = new OrdersService({} as never, {} as never, {} as never, dataSource as never);
+  const service = new OrdersService({} as never, {} as never, {} as never, {} as never, dataSource as never);
   return { service, manager };
 }
 
@@ -65,11 +65,13 @@ function buildCreateOrder() {
   const ordersRepo = {} as never;
   const tablesRepo = {} as never;
   const productsRepo = {} as never;
+  const qrCodesRepo = {} as never;
 
   const service = new OrdersService(
     ordersRepo,
     tablesRepo,
     productsRepo,
+    qrCodesRepo,
     dataSource as never,
   );
 
@@ -389,5 +391,22 @@ describe('OrdersService.createOrder', () => {
     expect(result.total).toBe(10000);
     expect(result.items).toHaveLength(1);
     expect(result.items[0].productId).toBe('p1');
+  });
+});
+
+describe('OrdersService.history', () => {
+  it('rejects an empty or inverted range', async () => {
+    const service = new OrdersService({} as never, {} as never, {} as never, {} as never, {} as never);
+    const d = new Date('2026-10-17T00:00:00Z');
+    await expect(service.history('b1', d, d)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('queries the branch and range newest first', async () => {
+    const find = vi.fn().mockResolvedValue([]);
+    const service = new OrdersService({ find } as never, {} as never, {} as never, {} as never, {} as never);
+    await service.history('b1', new Date('2026-10-17T00:00:00Z'), new Date('2026-10-18T00:00:00Z'));
+    expect(find).toHaveBeenCalledWith(
+      expect.objectContaining({ order: { createdAt: 'DESC' }, where: expect.objectContaining({ branchId: 'b1' }) }),
+    );
   });
 });

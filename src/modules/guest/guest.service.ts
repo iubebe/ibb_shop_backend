@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
+import { Branch } from '../../database/entities/branch.entity.js';
 import { Category } from '../../database/entities/category.entity.js';
 import { DiningTable } from '../../database/entities/dining-table.entity.js';
 import { OrderItem } from '../../database/entities/order-item.entity.js';
@@ -54,7 +55,8 @@ export class GuestService {
     const cached = await this.redis.getJson<GuestMenuView>(cacheKey);
     if (cached) return cached;
 
-    const [categories, products] = await Promise.all([
+    const [branch, categories, products] = await Promise.all([
+      this.dataSource.getRepository(Branch).findOneBy({ id: branchId }),
       this.categories.find({
         where: { branchId },
         order: { createdAt: 'ASC' },
@@ -65,6 +67,7 @@ export class GuestService {
       }),
     ]);
     const menu: GuestMenuView = {
+      shopName: branch?.name ?? '',
       categories: categories.map((c) => ({ id: c.id, name: c.name })),
       products: products.map((p) => ({
         id: p.id,

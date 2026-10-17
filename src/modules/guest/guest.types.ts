@@ -6,6 +6,7 @@ export interface GuestTableView {
 }
 
 export interface GuestMenuView {
+  shopName: string;
   categories: { id: string; name: string }[];
   products: {
     id: string;
