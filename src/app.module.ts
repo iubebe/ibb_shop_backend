@@ -22,6 +22,7 @@ import { AttendanceModule } from './modules/attendance/attendance.module.js';
 import { TablesModule } from './modules/tables/tables.module.js';
 import { StaffSchedulesModule } from './modules/staff-schedules/staff-schedules.module.js';
 import { PaymentQrCodesModule } from './modules/payment-qr-codes/payment-qr-codes.module.js';
+import { BranchesModule } from './modules/branches/branches.module.js';
 import { StockModule } from './modules/stock/stock.module.js';
 
 @Module({
@@ -43,6 +44,7 @@ import { StockModule } from './modules/stock/stock.module.js';
     UsersModule,
     AttendanceModule,
     TablesModule,
+    BranchesModule,
     StaffSchedulesModule,
     StockModule,
     VersionModule,
