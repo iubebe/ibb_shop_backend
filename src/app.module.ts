@@ -13,12 +13,17 @@ import { AuthModule } from './auth/auth.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { GuestModule } from './modules/guest/guest.module.js';
 import { DashboardModule } from './modules/dashboard/dashboard.module.js';
+import { FinanceModule } from './modules/finance/finance.module.js';
 import { CategoriesModule } from './modules/categories/categories.module.js';
 import { ProductsModule } from './modules/products/products.module.js';
 import { OrdersModule } from './modules/orders/orders.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 import { AttendanceModule } from './modules/attendance/attendance.module.js';
 import { TablesModule } from './modules/tables/tables.module.js';
+import { StaffSchedulesModule } from './modules/staff-schedules/staff-schedules.module.js';
+import { PaymentQrCodesModule } from './modules/payment-qr-codes/payment-qr-codes.module.js';
+import { BranchesModule } from './modules/branches/branches.module.js';
+import { StockModule } from './modules/stock/stock.module.js';
 
 @Module({
   imports: [
@@ -31,12 +36,17 @@ import { TablesModule } from './modules/tables/tables.module.js';
     AuthModule,
     GuestModule,
     OrdersModule,
+    PaymentQrCodesModule,
     CategoriesModule,
     DashboardModule,
+    FinanceModule,
     ProductsModule,
     UsersModule,
     AttendanceModule,
     TablesModule,
+    BranchesModule,
+    StaffSchedulesModule,
+    StockModule,
     VersionModule,
   ],
   controllers: [AppController, HealthController],

@@ -67,7 +67,7 @@ export class AttendanceService {
 
     const id = randomUUID();
     const key = photoKey(user, id, 'in');
-    await this.s3.upload(key, photo, { contentType: PHOTO_CONTENT_TYPE });
+    await this.s3.upload(key, photo, { contentType: PHOTO_CONTENT_TYPE, bucket: 'attendances' });
     try {
       const record = await this.dataSource.transaction(async (m) => {
         await this.lockUser(m, user.id);
@@ -106,7 +106,7 @@ export class AttendanceService {
     if (!open) throw new ConflictException('You are not checked in');
 
     const key = photoKey(user, open.id, 'out');
-    await this.s3.upload(key, photo, { contentType: PHOTO_CONTENT_TYPE });
+    await this.s3.upload(key, photo, { contentType: PHOTO_CONTENT_TYPE, bucket: 'attendances' });
     try {
       const record = await this.dataSource.transaction(async (m) => {
         await this.lockUser(m, user.id);

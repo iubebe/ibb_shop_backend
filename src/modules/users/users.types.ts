@@ -6,6 +6,7 @@ export interface UserView {
   email: string;
   role: UserRole;
   isActive: boolean;
+  hourlyRate: number | null;
   mustChangePassword: boolean;
   createdAt: Date;
 }

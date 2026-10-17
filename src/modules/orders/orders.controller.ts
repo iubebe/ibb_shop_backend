@@ -13,6 +13,7 @@ import { CurrentUser } from '../../auth/decorators/current-user.decorator.js';
 import { Roles } from '../../auth/decorators/roles.decorator.js';
 import { UserRole } from '../../database/enums.js';
 import { CreateOrderStaffDto } from './dto/create-order-staff.dto.js';
+import { OrderHistoryQuery } from './dto/order-history.query.js';
 import { ListOrdersQuery } from './dto/list-orders.query.js';
 import { UpdateServedDto } from './dto/update-served.dto.js';
 import { OrdersService } from './orders.service.js';
@@ -26,6 +27,13 @@ export class OrdersController {
   @Get()
   list(@CurrentUser() user: AuthUser, @Query() query: ListOrdersQuery) {
     return this.orders.list(user.branchId, query.status);
+  }
+
+  /** Admin order review: all statuses created in `[from, to)`. */
+  @Roles(UserRole.ADMIN)
+  @Get('history')
+  history(@CurrentUser() user: AuthUser, @Query() query: OrderHistoryQuery) {
+    return this.orders.history(user.branchId, new Date(query.from), new Date(query.to));
   }
 
   /** Create an order for a table with items (staff/admin only). */
@@ -50,7 +58,7 @@ export class OrdersController {
   }
 
   /** Mark order as paid. */
-  @Roles(UserRole.ADMIN, UserRole.CASHIER)
+  @Roles(UserRole.ADMIN, UserRole.STAFF, UserRole.CASHIER)
   @Post(':orderId/pay')
   pay(
     @CurrentUser() user: AuthUser,
@@ -58,6 +66,12 @@ export class OrdersController {
     @Body() dto: { paymentMethod: 'cash' | 'qr_manual' },
   ) {
     return this.orders.pay(user.branchId, orderId, dto.paymentMethod);
+  }
+
+  /** Get payment QR codes for the user's branch. */
+  @Get('payment-qr-codes')
+  getPaymentQrCodes(@CurrentUser() user: AuthUser) {
+    return this.orders.getPaymentQrCodes(user.branchId);
   }
 
   /** Staff marks how many units were delivered to the table. */

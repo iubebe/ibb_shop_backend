@@ -14,6 +14,7 @@ export interface StaffOrderView {
     name: string;
     quantity: number;
     servedQuantity: number;
+    unitPrice: number;
     notes: string | null;
   }[];
 }

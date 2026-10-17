@@ -5,11 +5,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository } from 'typeorm';
+import { And, DataSource, In, LessThan, MoreThanOrEqual, Repository } from 'typeorm';
 import { DiningTable } from '../../database/entities/dining-table.entity.js';
 import { OrderItem } from '../../database/entities/order-item.entity.js';
 import { Order } from '../../database/entities/order.entity.js';
 import { Product } from '../../database/entities/product.entity.js';
+import { PaymentQrCode } from '../../database/entities/payment-qr-code.entity.js';
 import { OrderStatus } from '../../database/enums.js';
 import type { CreateOrderStaffDto } from './dto/create-order-staff.dto.js';
 import type { ServedItemView, StaffOrderView } from './orders.types.js';
@@ -21,6 +22,7 @@ export class OrdersService {
     @InjectRepository(Order) private readonly orders: Repository<Order>,
     @InjectRepository(DiningTable) private readonly tables: Repository<DiningTable>,
     @InjectRepository(Product) private readonly products: Repository<Product>,
+    @InjectRepository(PaymentQrCode) private readonly qrCodes: Repository<PaymentQrCode>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -47,9 +49,23 @@ export class OrdersService {
         name: i.product.name,
         quantity: i.quantity,
         servedQuantity: i.servedQuantity,
+        unitPrice: i.unitPrice,
         notes: i.notes,
       })),
     }));
+  }
+
+  /** Every order created in `[from, to)`, newest first. Admin review by day. */
+  async history(branchId: string, from: Date, to: Date): Promise<StaffOrderView[]> {
+    if (!(from < to)) {
+      throw new BadRequestException('`from` must be before `to`');
+    }
+    const orders = await this.orders.find({
+      where: { branchId, createdAt: And(MoreThanOrEqual(from), LessThan(to)) },
+      relations: { table: true, items: { product: true } },
+      order: { createdAt: 'DESC' },
+    });
+    return orders.map((o) => this.toStaffOrderView(o));
   }
 
   async createOrder(
@@ -126,6 +142,7 @@ export class OrdersService {
         name: i.product.name,
         quantity: i.quantity,
         servedQuantity: i.servedQuantity,
+        unitPrice: i.unitPrice,
         notes: i.notes,
       })),
     };
@@ -201,6 +218,14 @@ export class OrdersService {
     });
   }
 
+  /** Get active payment QR codes for a branch. */
+  async getPaymentQrCodes(branchId: string) {
+    return this.qrCodes.find({
+      where: { branchId, isActive: true },
+      order: { createdAt: 'ASC' },
+    });
+  }
+
   /** Sets how many units of an item were delivered to the table. */
   async setServed(
     branchId: string,
@@ -244,6 +269,7 @@ export class OrdersService {
         name: i.product.name,
         quantity: i.quantity,
         servedQuantity: i.servedQuantity,
+        unitPrice: i.unitPrice,
         notes: i.notes,
       })),
     };
