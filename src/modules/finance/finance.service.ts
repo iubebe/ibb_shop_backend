@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { And, DataSource, LessThan, MoreThanOrEqual, Repository } from 'typeorm';
@@ -12,6 +8,7 @@ import {
   OrderStatus,
   PaymentMethod,
 } from '../../database/enums.js';
+import { assertDay, assertRange } from './finance-dates.js';
 import type {
   ExpenseView,
   FinanceDay,
@@ -21,7 +18,6 @@ import type {
 
 const DEFAULT_TIMEZONE = 'Asia/Ho_Chi_Minh';
 const MAX_RANGE_DAYS = 366;
-const MS_PER_DAY = 86_400_000;
 
 /** `$2`/`$3` are `[from, to)` days; `$4` is the timezone. */
 const RANGE_START = `($2::date)::timestamp AT TIME ZONE $4`;
@@ -114,7 +110,7 @@ export class FinanceService {
     from: string,
     to: string,
   ): Promise<FinanceSummary> {
-    this.assertRange(from, to);
+    assertRange(from, to, MAX_RANGE_DAYS);
     const args = [branchId, from, to, this.timezone, OrderStatus.PAID];
     const [daily, revenue, byCategory, salaryRows] = await Promise.all([
       this.dataSource.query<FinanceDay[]>(DAILY_SQL, args),
@@ -176,7 +172,7 @@ export class FinanceService {
     from: string,
     to: string,
   ): Promise<ExpenseView[]> {
-    this.assertRange(from, to);
+    assertRange(from, to, MAX_RANGE_DAYS);
     const rows = await this.expenses.find({
       where: {
         branchId,
@@ -198,7 +194,7 @@ export class FinanceService {
       note?: string | null;
     },
   ): Promise<ExpenseView> {
-    this.assertDay(dto.incurredOn);
+    assertDay(dto.incurredOn);
     const saved = await this.expenses.save(
       this.expenses.create({
         branchId,
@@ -223,7 +219,7 @@ export class FinanceService {
     },
   ): Promise<ExpenseView> {
     const row = await this.find(branchId, id);
-    if (patch.incurredOn !== undefined) this.assertDay(patch.incurredOn);
+    if (patch.incurredOn !== undefined) assertDay(patch.incurredOn);
     if (patch.category !== undefined) row.category = patch.category;
     if (patch.amount !== undefined) row.amount = patch.amount;
     if (patch.incurredOn !== undefined) row.incurredOn = patch.incurredOn;
@@ -250,26 +246,6 @@ export class FinanceService {
     const row = await this.expenses.findOne({ where: { id, branchId } });
     if (!row) throw new NotFoundException('Expense not found');
     return row;
-  }
-
-  private assertDay(day: string) {
-    const parsed = new Date(`${day}T00:00:00Z`);
-    if (
-      Number.isNaN(parsed.getTime()) ||
-      parsed.toISOString().slice(0, 10) !== day
-    ) {
-      throw new BadRequestException(`${day} is not a valid date`);
-    }
-  }
-
-  private assertRange(from: string, to: string) {
-    this.assertDay(from);
-    this.assertDay(to);
-    const span = Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`);
-    if (span <= 0) throw new BadRequestException('`from` must be before `to`');
-    if (span > MAX_RANGE_DAYS * MS_PER_DAY) {
-      throw new BadRequestException(`Range is limited to ${MAX_RANGE_DAYS} days`);
-    }
   }
 }
 

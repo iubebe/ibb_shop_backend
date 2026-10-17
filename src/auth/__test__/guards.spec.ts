@@ -10,8 +10,10 @@ import { CsrfService } from '../csrf.service.js';
 import { ALLOW_PASSWORD_CHANGE_KEY } from '../decorators/allow-password-change.decorator.js';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator.js';
 import { ROLES_KEY } from '../decorators/roles.decorator.js';
+import { SERVICE_AUTH_KEY } from '../decorators/service-auth.decorator.js';
 import { AuthGuard } from '../guards/auth.guard.js';
 import { CsrfGuard } from '../guards/csrf.guard.js';
+import { ServiceTokenGuard } from '../guards/service-token.guard.js';
 import { RolesGuard } from '../guards/roles.guard.js';
 import type { TokenService } from '../token.service.js';
 import { authConfig } from './helpers.js';
@@ -50,7 +52,7 @@ function reflectorWith(meta: Record<string, unknown>) {
 
 describe('CsrfGuard', () => {
   const csrf = new CsrfService(authConfig);
-  const guard = new CsrfGuard(csrf);
+  const guard = new CsrfGuard(csrf, reflectorWith({}));
   const token = csrf.generate();
 
   it('lets safe methods through', () => {
@@ -72,6 +74,15 @@ describe('CsrfGuard', () => {
 
   it('ignores WebSocket contexts', () => {
     expect(guard.canActivate(wsCtx({}))).toBe(true);
+  });
+
+  it('skips @ServiceAuth() routes (the token guard protects them)', () => {
+    const service = new CsrfGuard(
+      csrf,
+      reflectorWith({ [SERVICE_AUTH_KEY]: true }),
+    );
+    const post = httpCtx({ method: 'POST', headers: {}, cookies: {} });
+    expect(service.canActivate(post)).toBe(true);
   });
 });
 
@@ -174,5 +185,36 @@ describe('RolesGuard', () => {
     expect(() => guard.canActivate(wsCtx({ data: { user } }))).toThrow(
       WsException,
     );
+  });
+});
+
+describe('ServiceTokenGuard', () => {
+  const token = 'a'.repeat(40);
+  const config = (value?: string) =>
+    ({ get: () => value }) as unknown as import('@nestjs/config').ConfigService;
+  const withAuth = (authorization?: string) =>
+    httpCtx({ headers: { authorization } });
+
+  it('accepts the configured bearer token', () => {
+    const guard = new ServiceTokenGuard(config(token));
+    expect(guard.canActivate(withAuth(`Bearer ${token}`))).toBe(true);
+  });
+
+  it('rejects a wrong, missing or malformed token', () => {
+    const guard = new ServiceTokenGuard(config(token));
+    for (const header of [`Bearer ${'b'.repeat(40)}`, undefined, token, 'Bearer ']) {
+      expect(() => guard.canActivate(withAuth(header))).toThrow(
+        UnauthorizedException,
+      );
+    }
+  });
+
+  it('is off when no (or a too short) token is configured', () => {
+    for (const value of [undefined, '', 'short']) {
+      const guard = new ServiceTokenGuard(config(value));
+      expect(() => guard.canActivate(withAuth(`Bearer ${value}`))).toThrow(
+        UnauthorizedException,
+      );
+    }
   });
 });

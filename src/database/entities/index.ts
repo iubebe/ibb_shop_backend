@@ -1,6 +1,7 @@
 import { AttendanceRecord } from './attendance-record.entity.js';
 import { Branch } from './branch.entity.js';
 import { Category } from './category.entity.js';
+import { FinanceForecast } from './finance-forecast.entity.js';
 import { Expense } from './expense.entity.js';
 import { DiningTable } from './dining-table.entity.js';
 import { ImportReceiptLine } from './import-receipt-line.entity.js';
@@ -19,6 +20,7 @@ import { StockMovement } from './stock-movement.entity.js';
 import { User } from './user.entity.js';
 
 export {
+  FinanceForecast,
   Expense,
   ImportReceiptLine,
   ImportReceipt,
@@ -41,6 +43,7 @@ export {
 };
 
 export const entities = [
+  FinanceForecast,
   Expense,
   ImportReceiptLine,
   ImportReceipt,
