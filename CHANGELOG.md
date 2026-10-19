@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.0](https://github.com/iubebe/ibb_shop_backend/compare/ibb_shop_backend-v0.3.0...ibb_shop_backend-v0.4.0) (2026-10-19)
+
+
+### Features
+
+* public branch name ([8c97bf2](https://github.com/iubebe/ibb_shop_backend/commit/8c97bf29154df5d2d983349d385c35be575603ff))
+* redis cache menu and protect public api ([1a281cb](https://github.com/iubebe/ibb_shop_backend/commit/1a281cbca63a678866b19e45e21dbdfd8c90f58b))
+* staff import stock ([cfee7f7](https://github.com/iubebe/ibb_shop_backend/commit/cfee7f7fd2652a465b4b2c4822698cc70bd631fc))
+
+
+### Bug Fixes
+
+* attendance and qr code image ([82661c7](https://github.com/iubebe/ibb_shop_backend/commit/82661c7b4c6155144a3c66fa89f87cf4faa2bdbf))
+* private image ([d8a5915](https://github.com/iubebe/ibb_shop_backend/commit/d8a5915c01960ebc63a0024a97b674988cd44960))
+
 ## [0.3.0](https://github.com/iubebe/ibb_shop_backend/compare/ibb_shop_backend-v0.2.0...ibb_shop_backend-v0.3.0) (2026-10-17)
 
 
