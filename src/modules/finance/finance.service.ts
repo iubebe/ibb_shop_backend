@@ -43,6 +43,7 @@ const DAILY_SQL = `
     SELECT (r."importedAt" AT TIME ZONE $4)::date AS day, SUM(r."totalCost") AS v
     FROM import_receipts r
     WHERE r."branchId" = $1
+      AND r.status = 'confirmed'
       AND r."importedAt" >= ${RANGE_START} AND r."importedAt" < ${RANGE_END}
     GROUP BY 1
   ),

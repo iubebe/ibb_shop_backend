@@ -5,10 +5,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { randomUUID } from 'node:crypto';
 import {
   And,
   DataSource,
   EntityManager,
+  In,
   LessThan,
   MoreThanOrEqual,
   Repository,
@@ -19,24 +21,36 @@ import { StockItemMovement } from '../../database/entities/stock-item-movement.e
 import { StockItem } from '../../database/entities/stock-item.entity.js';
 import { Supplier } from '../../database/entities/supplier.entity.js';
 import {
+  ImportReceiptStatus,
   StockItemKind,
   StockItemMovementReason,
+  UserRole,
 } from '../../database/enums.js';
+import type { AuthUser } from '../../auth/auth.types.js';
+import { S3Service } from '../../s3/s3.service.js';
+import type { DownloadResult } from '../../s3/s3.types.js';
+import { detectImage } from '../products/product-image.js';
 import type {
   AdjustStockDto,
+  ConfirmImportDto,
+  CreateImportDraftDto,
   CreateImportDto,
+  ImportLineDto,
   CreateStockItemDto,
   UpdateStockItemDto,
   UpsertSupplierDto,
 } from './dto/stock.dto.js';
 import type {
   ImportReceiptView,
+  StockItemOptionView,
   StockItemView,
   StockMovementView,
   SupplierView,
 } from './stock.types.js';
 
 const DEFAULT_MOVEMENT_LIMIT = 50;
+const RECEIPT_BUCKET = 'import-receipts';
+const MINE_LIMIT = 50;
 /** Max range for the import list, keeps the response bounded. */
 const MAX_RANGE_DAYS = 93;
 
@@ -62,6 +76,7 @@ export class StockService {
     private readonly receipts: Repository<ImportReceipt>,
     @InjectRepository(StockItemMovement)
     private readonly movements: Repository<StockItemMovement>,
+    private readonly s3: S3Service,
   ) {}
 
   // ---- Stock items -------------------------------------------------------
@@ -232,42 +247,145 @@ export class StockService {
           note: dto.note ?? null,
           totalCost,
           createdByUserId: userId,
+          status: ImportReceiptStatus.CONFIRMED,
         }),
       );
 
-      // Lock in a stable order so concurrent imports can't deadlock.
-      const ids = [...new Set(dto.lines.map((l) => l.stockItemId))].sort();
-      const locked = new Map<string, StockItem>();
-      for (const itemId of ids) {
-        locked.set(itemId, await this.lockItem(manager, branchId, itemId));
-      }
-
-      for (const line of dto.lines) {
-        const item = locked.get(line.stockItemId)!;
-        if (!item.isActive) {
-          throw new BadRequestException(`"${item.name}" is deactivated`);
-        }
-        await manager.save(
-          manager.create(ImportReceiptLine, {
-            receiptId: receipt.id,
-            stockItemId: item.id,
-            quantity: line.quantity,
-            unitCost: line.unitCost,
-          }),
-        );
-        await this.applyMovement(manager, item, {
-          change: line.quantity,
-          reason: StockItemMovementReason.IMPORT,
-          receiptId: receipt.id,
-          userId,
-        });
-        item.lastUnitCost = line.unitCost;
-        await manager.save(item);
-      }
+      await this.postLines(manager, branchId, receipt.id, dto.lines, userId);
       return receipt.id;
     });
 
     return this.getImport(branchId, receiptId);
+  }
+
+  /** Staff proposes an import: photo + lines, no stock change until an admin confirms. */
+  async createDraft(
+    branchId: string,
+    userId: string,
+    dto: CreateImportDraftDto,
+    image: Buffer | undefined,
+  ): Promise<ImportReceiptView> {
+    const { ext, contentType } = detectImage(image);
+    if (dto.supplierId) await this.findSupplier(branchId, dto.supplierId);
+    await this.assertActiveItems(branchId, dto.lines);
+
+    await this.s3.ensureBucket(RECEIPT_BUCKET);
+    const key = `${branchId}/${randomUUID()}.${ext}`;
+    await this.s3.upload(key, image!, {
+      contentType,
+      cacheControl: 'private, max-age=31536000, immutable',
+      bucket: RECEIPT_BUCKET,
+    });
+
+    try {
+      const receiptId = await this.dataSource.transaction(async (manager) => {
+        const importedAt = new Date();
+        const receipt = await manager.save(
+          manager.create(ImportReceipt, {
+            branchId,
+            code: await this.nextCode(manager, branchId, importedAt),
+            supplierId: dto.supplierId ?? null,
+            importedAt,
+            note: dto.note ?? null,
+            totalCost: linesTotal(dto.lines),
+            status: ImportReceiptStatus.PENDING,
+            imageKey: key,
+            createdByUserId: userId,
+          }),
+        );
+        await this.saveLines(manager, receipt.id, dto.lines);
+        return receipt.id;
+      });
+      return await this.getImport(branchId, receiptId);
+    } catch (err) {
+      await this.deleteImage(key);
+      throw err;
+    }
+  }
+
+  /** Adds the stock of a pending draft. `dto.lines` replaces the staff's lines (cost fixes). */
+  async confirmImport(
+    branchId: string,
+    adminId: string,
+    id: string,
+    dto: ConfirmImportDto,
+  ): Promise<ImportReceiptView> {
+    await this.dataSource.transaction(async (manager) => {
+      const receipt = await this.lockPending(manager, branchId, id);
+      const lines: ImportLineDto[] =
+        dto.lines ??
+        (await manager.find(ImportReceiptLine, { where: { receiptId: id } })).map(
+          (l) => ({
+            stockItemId: l.stockItemId,
+            quantity: l.quantity,
+            unitCost: l.unitCost,
+          }),
+        );
+      await manager.delete(ImportReceiptLine, { receiptId: id });
+      await this.postLines(manager, branchId, id, lines, adminId);
+      receipt.totalCost = linesTotal(lines);
+      receipt.status = ImportReceiptStatus.CONFIRMED;
+      receipt.reviewedByUserId = adminId;
+      receipt.reviewedAt = new Date();
+      await manager.save(receipt);
+    });
+    return this.getImport(branchId, id);
+  }
+
+  async rejectImport(
+    branchId: string,
+    adminId: string,
+    id: string,
+    reason: string,
+  ): Promise<ImportReceiptView> {
+    await this.dataSource.transaction(async (manager) => {
+      const receipt = await this.lockPending(manager, branchId, id);
+      receipt.status = ImportReceiptStatus.REJECTED;
+      receipt.rejectReason = reason;
+      receipt.reviewedByUserId = adminId;
+      receipt.reviewedAt = new Date();
+      await manager.save(receipt);
+    });
+    return this.getImport(branchId, id);
+  }
+
+  /** Withdraws a pending draft (its author, or an admin). Confirmed receipts are permanent. */
+  async cancelDraft(branchId: string, user: AuthUser, id: string): Promise<void> {
+    const receipt = await this.findReceiptFor(branchId, user, id);
+    if (receipt.status !== ImportReceiptStatus.PENDING) {
+      throw new ConflictException('Only pending drafts can be deleted');
+    }
+    await this.receipts.remove(receipt);
+    await this.deleteImage(receipt.imageKey);
+  }
+
+  /** The caller's own recent drafts and their review outcome. */
+  async listMine(branchId: string, userId: string): Promise<ImportReceiptView[]> {
+    const rows = await this.receipts.find({
+      where: { branchId, createdByUserId: userId },
+      relations: { supplier: true, createdByUser: true, lines: { stockItem: true } },
+      order: { createdAt: 'DESC' },
+      take: MINE_LIMIT,
+    });
+    return rows.map(receiptView);
+  }
+
+  async getImportImage(
+    branchId: string,
+    user: AuthUser,
+    id: string,
+  ): Promise<DownloadResult> {
+    const receipt = await this.findReceiptFor(branchId, user, id);
+    if (!receipt.imageKey) throw new NotFoundException('Receipt has no image');
+    return this.s3.download(receipt.imageKey, RECEIPT_BUCKET);
+  }
+
+  async listItemOptions(branchId: string): Promise<StockItemOptionView[]> {
+    const rows = await this.items.find({
+      where: { branchId, isActive: true },
+      order: { name: 'ASC' },
+    });
+    return rows.map((i) => ({ id: i.id, name: i.name, kind: i.kind, unit: i.unit }));
   }
 
   /** Receipts with `importedAt` in `[from, to)`, newest first. */
@@ -311,6 +429,119 @@ export class StockService {
   }
 
   // ---- Internals ---------------------------------------------------------
+
+  /** Saves the lines, adds their quantities to the (locked) items and records the ledger. */
+  private async postLines(
+    manager: EntityManager,
+    branchId: string,
+    receiptId: string,
+    lines: ImportLineDto[],
+    userId: string,
+  ): Promise<void> {
+    // Lock in a stable order so concurrent imports can't deadlock.
+    const ids = [...new Set(lines.map((l) => l.stockItemId))].sort();
+    const locked = new Map<string, StockItem>();
+    for (const itemId of ids) {
+      locked.set(itemId, await this.lockItem(manager, branchId, itemId));
+    }
+
+    for (const line of lines) {
+      const item = locked.get(line.stockItemId)!;
+      if (!item.isActive) {
+        throw new BadRequestException(`"${item.name}" is deactivated`);
+      }
+      await manager.save(
+        manager.create(ImportReceiptLine, {
+          receiptId,
+          stockItemId: item.id,
+          quantity: line.quantity,
+          unitCost: line.unitCost,
+        }),
+      );
+      await this.applyMovement(manager, item, {
+        change: line.quantity,
+        reason: StockItemMovementReason.IMPORT,
+        receiptId,
+        userId,
+      });
+      item.lastUnitCost = line.unitCost;
+      await manager.save(item);
+    }
+  }
+
+  /** Draft lines: stored only, stock untouched. */
+  private async saveLines(
+    manager: EntityManager,
+    receiptId: string,
+    lines: ImportLineDto[],
+  ): Promise<void> {
+    for (const line of lines) {
+      await manager.save(
+        manager.create(ImportReceiptLine, {
+          receiptId,
+          stockItemId: line.stockItemId,
+          quantity: line.quantity,
+          unitCost: line.unitCost,
+        }),
+      );
+    }
+  }
+
+  private async assertActiveItems(
+    branchId: string,
+    lines: ImportLineDto[],
+  ): Promise<void> {
+    const ids = [...new Set(lines.map((l) => l.stockItemId))];
+    const found = await this.items.find({ where: { branchId, id: In(ids) } });
+    if (found.length !== ids.length) {
+      throw new NotFoundException('Stock item not found');
+    }
+    const inactive = found.find((i) => !i.isActive);
+    if (inactive) {
+      throw new BadRequestException(`"${inactive.name}" is deactivated`);
+    }
+  }
+
+  private async lockPending(
+    manager: EntityManager,
+    branchId: string,
+    id: string,
+  ): Promise<ImportReceipt> {
+    const receipt = await manager.findOne(ImportReceipt, {
+      where: { id, branchId },
+      lock: { mode: 'pessimistic_write' },
+    });
+    if (!receipt) throw new NotFoundException('Import receipt not found');
+    if (receipt.status !== ImportReceiptStatus.PENDING) {
+      throw new ConflictException('Import is not pending');
+    }
+    return receipt;
+  }
+
+  /** Staff only see their own receipts; others look like they don't exist. */
+  private async findReceiptFor(
+    branchId: string,
+    user: AuthUser,
+    id: string,
+  ): Promise<ImportReceipt> {
+    const receipt = await this.receipts.findOne({ where: { id, branchId } });
+    if (
+      !receipt ||
+      (user.role !== UserRole.ADMIN && receipt.createdByUserId !== user.id)
+    ) {
+      throw new NotFoundException('Import receipt not found');
+    }
+    return receipt;
+  }
+
+  private async deleteImage(key: string | null): Promise<void> {
+    if (!key) return;
+    try {
+      await this.s3.delete(key, RECEIPT_BUCKET);
+    } catch {
+      // orphaned object, harmless
+    }
+  }
 
   private async findItem(branchId: string, id: string): Promise<StockItem> {
     const item = await this.items.findOne({ where: { id, branchId } });
@@ -405,6 +636,10 @@ export class StockService {
   }
 }
 
+function linesTotal(lines: ImportLineDto[]): number {
+  return round(lines.reduce((sum, l) => sum + l.quantity * l.unitCost, 0), 2);
+}
+
 function itemView(i: StockItem): StockItemView {
   return {
     id: i.id,
@@ -432,6 +667,10 @@ function receiptView(r: ImportReceipt): ImportReceiptView {
     note: r.note,
     totalCost: r.totalCost,
     createdByName: r.createdByUser?.name ?? null,
+    createdByUserId: r.createdByUserId,
+    status: r.status,
+    hasImage: r.imageKey !== null,
+    rejectReason: r.rejectReason,
     lines: [...r.lines]
       .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
       .map((l) => ({

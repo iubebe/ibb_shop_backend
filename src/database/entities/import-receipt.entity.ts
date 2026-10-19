@@ -7,6 +7,7 @@ import {
   OneToMany,
 } from 'typeorm';
 import type { Relation } from 'typeorm';
+import { ImportReceiptStatus } from '../enums.js';
 import { numericTransformer } from '../transformers.js';
 import { BaseEntity } from './base.entity.js';
 import { Branch } from './branch.entity.js';
@@ -14,7 +15,10 @@ import { ImportReceiptLine } from './import-receipt-line.entity.js';
 import { Supplier } from './supplier.entity.js';
 import { User } from './user.entity.js';
 
-/** A stock import. Recorded instantly: stock is already added when it exists. */
+/**
+ * A stock import. Stock is added only when `status` is `confirmed`: admin
+ * imports are confirmed at once, staff drafts stay `pending` until reviewed.
+ */
 @Entity('import_receipts')
 @Index(['branchId', 'code'], { unique: true })
 export class ImportReceipt extends BaseEntity {
@@ -51,6 +55,26 @@ export class ImportReceipt extends BaseEntity {
     transformer: numericTransformer,
   })
   totalCost: number;
+
+  @Column({
+    type: 'enum',
+    enum: ImportReceiptStatus,
+    default: ImportReceiptStatus.CONFIRMED,
+  })
+  status: ImportReceiptStatus;
+
+  /** S3 key (bucket `import-receipts`) of the photographed invoice/goods. */
+  @Column({ type: 'varchar', nullable: true })
+  imageKey: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  rejectReason: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  reviewedByUserId: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  reviewedAt: Date | null;
 
   @Column({ type: 'uuid', nullable: true })
   createdByUserId: string | null;
