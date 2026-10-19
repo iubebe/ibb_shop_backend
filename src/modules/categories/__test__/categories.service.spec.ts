@@ -13,6 +13,7 @@ function build(opts: { found?: unknown; clash?: unknown } = {}) {
   };
   const guestService = {
     revalidateMenuCache: vi.fn().mockResolvedValue(undefined),
+    revalidateProductCaches: vi.fn().mockResolvedValue(undefined),
   };
   return { service: new CategoriesService(repo as never, guestService as never), repo };
 }

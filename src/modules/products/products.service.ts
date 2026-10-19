@@ -9,11 +9,16 @@ import { randomUUID } from 'node:crypto';
 import { QueryFailedError, Repository } from 'typeorm';
 import { Category } from '../../database/entities/category.entity.js';
 import { Product } from '../../database/entities/product.entity.js';
+import { REDIS_KEY } from '../../constants/redis-key.constants.js';
+import { RedisService } from '../../redis/redis.service.js';
 import { S3Service } from '../../s3/s3.service.js';
 import { detectImage } from './product-image.js';
 import type { CreateProductDto, UpdateProductDto } from './dto/product.dto.js';
 import type { ProductView } from './products.types.js';
 import { GuestService } from '../guest/guest.service.js';
+
+/** Admin product list cache TTL: 30 minutes (also dropped on every change). */
+const LIST_CACHE_TTL_SECONDS = 30 * 60;
 
 /** Postgres foreign_key_violation. */
 const FK_VIOLATION = '23503';
@@ -26,14 +31,22 @@ export class ProductsService {
     @InjectRepository(Category) private readonly categories: Repository<Category>,
     private readonly s3: S3Service,
     private readonly guestService: GuestService,
+    private readonly redis: RedisService,
   ) {}
 
   async list(branchId: string, categoryId?: string): Promise<ProductView[]> {
-    const rows = await this.products.find({
-      where: { branchId, ...(categoryId ? { categoryId } : {}) },
-      order: { createdAt: 'ASC' },
-    });
-    return rows.map(view);
+    // One cached list per branch; the category filter is applied on top of it.
+    const cacheKey = `${REDIS_KEY.PRODUCT_LIST}:${branchId}`;
+    let all = await this.redis.getJson<ProductView[]>(cacheKey);
+    if (!all) {
+      const rows = await this.products.find({
+        where: { branchId },
+        order: { createdAt: 'ASC' },
+      });
+      all = rows.map(view);
+      await this.redis.setJson(cacheKey, all, LIST_CACHE_TTL_SECONDS);
+    }
+    return categoryId ? all.filter((p) => p.categoryId === categoryId) : all;
   }
 
   async create(branchId: string, dto: CreateProductDto): Promise<ProductView> {
@@ -48,7 +61,7 @@ export class ProductsService {
         isActive: dto.isActive ?? true,
       }),
     );
-    await this.guestService.revalidateMenuCache(branchId);
+    await this.guestService.revalidateProductCaches(branchId);
     return view(saved);
   }
 
@@ -71,7 +84,7 @@ export class ProductsService {
     if (dto.imageUrl !== undefined && oldImageUrl !== saved.imageUrl) {
       await this.deleteStoredImage(oldImageUrl);
     }
-    await this.guestService.revalidateMenuCache(branchId);
+    await this.guestService.revalidateProductCaches(branchId);
     return view(saved);
   }
 
@@ -93,6 +106,7 @@ export class ProductsService {
     product.imageUrl = url;
     const saved = await this.products.save(product);
     await this.deleteStoredImage(oldImageUrl);
+    await this.guestService.revalidateProductCaches(branchId);
     return view(saved);
   }
 
@@ -102,6 +116,7 @@ export class ProductsService {
     product.imageUrl = null;
     const saved = await this.products.save(product);
     await this.deleteStoredImage(oldImageUrl);
+    await this.guestService.revalidateProductCaches(branchId);
     return view(saved);
   }
 
@@ -112,7 +127,7 @@ export class ProductsService {
     try {
       await this.products.remove(product);
       await this.deleteStoredImage(imageUrl);
-      await this.guestService.revalidateMenuCache(branchId);
+      await this.guestService.revalidateProductCaches(branchId);
     } catch (err) {
       if (
         err instanceof QueryFailedError &&
