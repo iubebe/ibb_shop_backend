@@ -5,7 +5,10 @@ import { Repository } from 'typeorm';
 import { PaymentQrCode } from '../../database/entities/payment-qr-code.entity.js';
 import { detectImage } from '../products/product-image.js';
 import { S3Service } from '../../s3/s3.service.js';
+import type { DownloadResult } from '../../s3/s3.types.js';
 import type { UpdatePaymentQrCodeDto } from './dto/payment-qr-code.dto.js';
+
+const QR_BUCKET = 'payment-qr';
 
 /** Admin management of the transfer QR images shown at checkout. Branch-scoped. */
 @Injectable()
@@ -60,9 +63,10 @@ export class PaymentQrCodesService {
     await this.deleteObject(qr.imagePath);
   }
 
-  async getImagePresignedUrl(branchId: string, id: string, expiresInSeconds = 3600): Promise<string> {
+  /** Streams the private image through the backend; presigned URLs would carry the internal S3 host. */
+  async getImage(branchId: string, id: string): Promise<DownloadResult> {
     const qr = await this.find(branchId, id);
-    return this.s3.getPresignedGetUrl(qr.imagePath, expiresInSeconds);
+    return this.s3.download(qr.imagePath, QR_BUCKET);
   }
 
   private async find(branchId: string, id: string): Promise<PaymentQrCode> {
@@ -77,7 +81,7 @@ export class PaymentQrCodesService {
     await this.s3.upload(key, buffer!, {
       contentType,
       cacheControl: 'private, max-age=31536000, immutable',
-      bucket: 'payment-qr',
+      bucket: QR_BUCKET,
     });
     return { key };
   }
@@ -85,7 +89,7 @@ export class PaymentQrCodesService {
   private async deleteObject(key: string | null): Promise<void> {
     if (!key) return;
     try {
-      await this.s3.delete(key);
+      await this.s3.delete(key, QR_BUCKET);
     } catch {
       // orphaned object, harmless
     }

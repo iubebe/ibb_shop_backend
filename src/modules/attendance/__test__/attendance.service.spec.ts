@@ -82,7 +82,7 @@ describe('AttendanceService', () => {
       );
       await expect(service.checkIn(user, jpeg)).rejects.toBeInstanceOf(ConflictException);
       expect(s3.upload).toHaveBeenCalledTimes(1);
-      expect(s3.delete).toHaveBeenCalledWith(s3.upload.mock.calls[0][0]);
+      expect(s3.delete).toHaveBeenCalledWith(s3.upload.mock.calls[0][0], 'attendances');
       expect(queue.enqueue).not.toHaveBeenCalled();
     });
 

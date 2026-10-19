@@ -9,7 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
-  Redirect,
+  StreamableFile,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
@@ -75,13 +75,16 @@ export class PaymentQrCodesController {
     return this.qrCodes.replaceImage(user.branchId, id, image?.buffer);
   }
 
-  /** Redirects to a presigned URL for downloading the QR image (private, requires auth). */
+  /** Streams the QR image (private, requires auth). */
   @Get(':id/image')
   @Roles(UserRole.ADMIN, UserRole.STAFF, UserRole.CASHIER)
-  @Redirect()
   async getImage(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
-    const url = await this.qrCodes.getImagePresignedUrl(user.branchId, id);
-    return { url };
+    const img = await this.qrCodes.getImage(user.branchId, id);
+    return new StreamableFile(img.body, {
+      type: img.contentType,
+      length: img.contentLength,
+      disposition: 'inline',
+    });
   }
 
   @Delete(':id')

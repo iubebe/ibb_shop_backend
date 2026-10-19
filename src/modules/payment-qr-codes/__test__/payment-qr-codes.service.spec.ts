@@ -57,7 +57,7 @@ describe('PaymentQrCodesService.create', () => {
     ctx.repo.save.mockRejectedValueOnce(new Error('db down'));
 
     await expect(ctx.service.create('b1', 'MoMo', JPEG)).rejects.toThrow('db down');
-    expect(ctx.s3.delete).toHaveBeenCalledWith(ctx.s3.upload.mock.calls[0][0]);
+    expect(ctx.s3.delete).toHaveBeenCalledWith(ctx.s3.upload.mock.calls[0][0], 'payment-qr');
   });
 });
 
@@ -84,7 +84,7 @@ describe('PaymentQrCodesService.replaceImage', () => {
     const saved = await ctx.service.replaceImage('b1', 'qr1', JPEG);
 
     expect(saved.imagePath).toMatch(/\.jpg$/);
-    expect(ctx.s3.delete).toHaveBeenCalledWith('b1/old.png');
+    expect(ctx.s3.delete).toHaveBeenCalledWith('b1/old.png', 'payment-qr');
   });
 });
 
@@ -95,7 +95,7 @@ describe('PaymentQrCodesService.remove', () => {
     await ctx.service.remove('b1', 'qr1');
 
     expect(ctx.repo.remove).toHaveBeenCalled();
-    expect(ctx.s3.delete).toHaveBeenCalledWith('b1/a.jpg');
+    expect(ctx.s3.delete).toHaveBeenCalledWith('b1/a.jpg', 'payment-qr');
   });
 
   it('404s when the code does not exist', async () => {

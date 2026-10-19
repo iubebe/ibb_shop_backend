@@ -41,6 +41,8 @@ import { ShopCalendar } from './shop-calendar.js';
 
 const RECENT_LIMIT = 10;
 
+const PHOTO_BUCKET = 'attendances';
+
 @Injectable()
 export class AttendanceService {
   constructor(
@@ -67,7 +69,7 @@ export class AttendanceService {
 
     const id = randomUUID();
     const key = photoKey(user, id, 'in');
-    await this.s3.upload(key, photo, { contentType: PHOTO_CONTENT_TYPE, bucket: 'attendances' });
+    await this.s3.upload(key, photo, { contentType: PHOTO_CONTENT_TYPE, bucket: PHOTO_BUCKET });
     try {
       const record = await this.dataSource.transaction(async (m) => {
         await this.lockUser(m, user.id);
@@ -106,7 +108,7 @@ export class AttendanceService {
     if (!open) throw new ConflictException('You are not checked in');
 
     const key = photoKey(user, open.id, 'out');
-    await this.s3.upload(key, photo, { contentType: PHOTO_CONTENT_TYPE, bucket: 'attendances' });
+    await this.s3.upload(key, photo, { contentType: PHOTO_CONTENT_TYPE, bucket: PHOTO_BUCKET });
     try {
       const record = await this.dataSource.transaction(async (m) => {
         await this.lockUser(m, user.id);
@@ -232,7 +234,7 @@ export class AttendanceService {
     const key =
       kind === 'check-in' ? record?.checkInPhotoKey : record?.checkOutPhotoKey;
     if (!key) throw new NotFoundException('Photo not found');
-    const file = await this.s3.download(key);
+    const file = await this.s3.download(key, PHOTO_BUCKET);
     return new StreamableFile(file.body, { type: PHOTO_CONTENT_TYPE });
   }
 
@@ -258,7 +260,7 @@ export class AttendanceService {
 
   private async discardPhoto(key: string): Promise<void> {
     try {
-      await this.s3.delete(key);
+      await this.s3.delete(key, PHOTO_BUCKET);
     } catch (err) {
       this.logger.warn({ err, key }, 'Could not remove orphaned photo');
     }
