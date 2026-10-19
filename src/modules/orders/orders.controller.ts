@@ -29,8 +29,8 @@ export class OrdersController {
     return this.orders.list(user.branchId, query.status);
   }
 
-  /** Admin order review: all statuses created in `[from, to)`. */
-  @Roles(UserRole.ADMIN)
+  /** Order review (admin, staff): all statuses created in `[from, to)`. */
+  @Roles(UserRole.ADMIN, UserRole.STAFF)
   @Get('history')
   history(@CurrentUser() user: AuthUser, @Query() query: OrderHistoryQuery) {
     return this.orders.history(user.branchId, new Date(query.from), new Date(query.to));

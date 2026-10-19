@@ -165,6 +165,54 @@ export class CreateImportDto {
   lines: ImportLineDto[];
 }
 
+/** Multipart form: `lines` arrives as a JSON string next to the `image` file. */
+export class CreateImportDraftDto {
+  @IsOptional()
+  @Transform(blankToNull)
+  @IsUUID()
+  supplierId?: string | null;
+
+  @IsOptional()
+  @Transform(blankToNull)
+  @IsString()
+  @MaxLength(200)
+  note?: string | null;
+
+  @Transform(({ value }) => {
+    if (typeof value !== 'string') return value;
+    try {
+      return JSON.parse(value);
+    } catch {
+      return null;
+    }
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(200)
+  @ValidateNested({ each: true })
+  @Type(() => ImportLineDto)
+  lines: ImportLineDto[];
+}
+
+/** Admin may correct the lines (e.g. unit costs) while confirming. */
+export class ConfirmImportDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(200)
+  @ValidateNested({ each: true })
+  @Type(() => ImportLineDto)
+  lines?: ImportLineDto[];
+}
+
+export class RejectImportDto {
+  @Transform(trim)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(200)
+  reason: string;
+}
+
 export class ListImportsQuery {
   @IsDateString()
   from: string;

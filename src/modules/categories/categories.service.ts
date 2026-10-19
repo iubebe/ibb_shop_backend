@@ -61,7 +61,8 @@ export class CategoriesService {
   async remove(branchId: string, id: string): Promise<void> {
     const category = await this.find(branchId, id);
     await this.categories.remove(category);
-    await this.guestService.revalidateMenuCache(branchId);
+    // Its products became uncategorized, which the admin list also shows.
+    await this.guestService.revalidateProductCaches(branchId);
   }
 
   private async find(branchId: string, id: string) {

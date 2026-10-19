@@ -5,7 +5,7 @@ import { ProductsService } from '../products.service.js';
 const MEDIA = 'https://media.example.vn';
 const PNG = Buffer.from('89504e470d0a1a0a00', 'hex');
 
-function build(opts: { found?: unknown; categoryExists?: boolean; removeError?: unknown } = {}) {
+function build(opts: { found?: unknown; categoryExists?: boolean; removeError?: unknown; cached?: unknown } = {}) {
   const products = {
     findOneBy: vi.fn().mockResolvedValue(opts.found ?? null),
     find: vi.fn().mockResolvedValue([]),
@@ -27,15 +27,61 @@ function build(opts: { found?: unknown; categoryExists?: boolean; removeError?: 
 
   const guestService = {
     revalidateMenuCache: vi.fn().mockResolvedValue(undefined),
+    revalidateProductCaches: vi.fn().mockResolvedValue(undefined),
+  };
+  const redis = {
+    getJson: vi.fn().mockResolvedValue(opts.cached ?? null),
+    setJson: vi.fn().mockResolvedValue(undefined),
   };
 
   return {
-    service: new ProductsService(products as never, categories as never, s3 as never, guestService as never),
+    service: new ProductsService(
+      products as never,
+      categories as never,
+      s3 as never,
+      guestService as never,
+      redis as never,
+    ),
     products,
     categories,
     s3,
+    guestService,
+    redis,
   };
 }
+
+describe('ProductsService list cache', () => {
+  it('reads the DB once, caches the whole branch list and filters by category', async () => {
+    const { service, products, redis } = build();
+    products.find.mockResolvedValue([
+      { id: 'p1', categoryId: 'c1', name: 'A', price: 1, imageUrl: null, isActive: true },
+      { id: 'p2', categoryId: 'c2', name: 'B', price: 2, imageUrl: null, isActive: true },
+    ]);
+    const filtered = await service.list('b1', 'c2');
+    expect(filtered.map((p) => p.id)).toEqual(['p2']);
+    expect(products.find).toHaveBeenCalledWith(expect.objectContaining({ where: { branchId: 'b1' } }));
+    expect(redis.setJson).toHaveBeenCalledWith('product:list:b1', expect.any(Array), 1800);
+    expect(redis.setJson.mock.calls[0][1]).toHaveLength(2);
+  });
+
+  it('serves a cached list without touching the DB', async () => {
+    const cached = [{ id: 'p1', categoryId: null, name: 'A' }];
+    const { service, products } = build({ cached });
+    await expect(service.list('b1')).resolves.toEqual(cached);
+    expect(products.find).not.toHaveBeenCalled();
+  });
+
+  it('drops the product caches on every write, images included', async () => {
+    const found = { id: 'p1', branchId: 'b1', imageUrl: null };
+    const ctx = build({ found });
+    await ctx.service.create('b1', { name: 'T', price: 1 });
+    await ctx.service.update('b1', 'p1', { name: 'N' });
+    await ctx.service.setImage('b1', 'p1', PNG);
+    await ctx.service.removeImage('b1', 'p1');
+    await ctx.service.remove('b1', 'p1');
+    expect(ctx.guestService.revalidateProductCaches).toHaveBeenCalledTimes(5);
+  });
+});
 
 describe('ProductsService', () => {
   it('creates an active, uncategorized product by default', async () => {
