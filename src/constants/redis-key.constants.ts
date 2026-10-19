@@ -5,4 +5,5 @@ export const REDIS_KEY = {
   THROTTLE: 'throttle',
   ATTENDANCE_FACE_QUEUE: 'attendance:face-queue',
   GUEST_MENU: 'guest:menu',
+  BRANCH_PUBLIC_NAME: 'branch:public-name',
 };

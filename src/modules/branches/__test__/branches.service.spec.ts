@@ -1,13 +1,24 @@
 import { NotFoundException } from '@nestjs/common';
 import { BranchesService } from '../branches.service.js';
 
-function build(found: unknown = { id: 'b1', name: 'Old', address: 'Addr' }) {
+function build(found: unknown = { id: 'b1', name: 'Old', address: 'Addr' }, cached: unknown = null) {
   const branches = {
     findOneBy: vi.fn().mockResolvedValue(found),
+    find: vi.fn().mockResolvedValue(found ? [found] : []),
     save: vi.fn((v: object) => Promise.resolve(v)),
   };
   const guest = { revalidateMenuCache: vi.fn().mockResolvedValue(undefined) };
-  return { service: new BranchesService(branches as never, guest as never), branches, guest };
+  const redis = {
+    getJson: vi.fn().mockResolvedValue(cached),
+    setJson: vi.fn().mockResolvedValue(undefined),
+    del: vi.fn().mockResolvedValue(1),
+  };
+  return {
+    service: new BranchesService(branches as never, guest as never, redis as never),
+    branches,
+    guest,
+    redis,
+  };
 }
 
 describe('BranchesService', () => {
@@ -23,6 +34,31 @@ describe('BranchesService', () => {
       address: 'Addr',
     });
     expect(guest.revalidateMenuCache).toHaveBeenCalledWith('b1');
+  });
+
+  it('drops the public name cache on rename', async () => {
+    const { service, redis } = build();
+    await service.update('b1', { name: 'Iubebe' });
+    expect(redis.del).toHaveBeenCalledWith('branch:public-name');
+  });
+
+  it('caches the public name after the first DB read', async () => {
+    const { service, branches, redis } = build();
+    await expect(service.getPublicName()).resolves.toEqual({ name: 'Old' });
+    expect(branches.find).toHaveBeenCalledTimes(1);
+    expect(redis.setJson).toHaveBeenCalledWith('branch:public-name', { name: 'Old' }, 1800);
+  });
+
+  it('serves the public name from cache without touching the DB', async () => {
+    const { service, branches } = build(undefined, { name: 'Cached' });
+    await expect(service.getPublicName()).resolves.toEqual({ name: 'Cached' });
+    expect(branches.find).not.toHaveBeenCalled();
+  });
+
+  it('does not cache a missing branch', async () => {
+    const { service, redis } = build(null);
+    await expect(service.getPublicName()).rejects.toBeInstanceOf(NotFoundException);
+    expect(redis.setJson).not.toHaveBeenCalled();
   });
 
   it('clears the address with an empty string', async () => {
