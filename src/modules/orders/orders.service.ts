@@ -12,6 +12,7 @@ import { Order } from '../../database/entities/order.entity.js';
 import { Product } from '../../database/entities/product.entity.js';
 import { PaymentQrCode } from '../../database/entities/payment-qr-code.entity.js';
 import { OrderStatus } from '../../database/enums.js';
+import type { AddOrderItemsDto } from './dto/add-order-items.dto.js';
 import type { CreateOrderStaffDto } from './dto/create-order-staff.dto.js';
 import type { ServedItemView, StaffOrderView } from './orders.types.js';
 
@@ -146,6 +147,79 @@ export class OrdersService {
         notes: i.notes,
       })),
     };
+  }
+
+  /**
+   * Adds products to an open order. A product already on the order with the same
+   * price snapshot is merged into its line (served count kept); otherwise a new line is added.
+   */
+  async addItems(
+    branchId: string,
+    orderId: string,
+    dto: AddOrderItemsDto,
+  ): Promise<StaffOrderView> {
+    return this.dataSource.transaction(async (manager) => {
+      const order = await manager.findOne(Order, {
+        where: { id: orderId, branchId },
+        relations: { table: true, items: { product: true } },
+        lock: { mode: 'pessimistic_write', tables: ['orders'] },
+      });
+      if (!order) throw new NotFoundException('Order not found');
+      if (
+        order.status !== OrderStatus.CONFIRMED &&
+        order.status !== OrderStatus.PENDING_CONFIRMATION
+      ) {
+        throw new ConflictException('Items can only be added to an open order');
+      }
+
+      const lines = new Map<string, { quantity: number; notes: string[] }>();
+      for (const item of dto.items) {
+        const line = lines.get(item.productId) ?? { quantity: 0, notes: [] };
+        line.quantity += item.quantity;
+        if (item.notes?.trim()) line.notes.push(item.notes.trim());
+        lines.set(item.productId, line);
+      }
+
+      const products = await manager.find(Product, {
+        where: { id: In([...lines.keys()]), branchId, isActive: true },
+      });
+      if (products.length !== lines.size) {
+        throw new BadRequestException('Some products are not available');
+      }
+
+      for (const p of products) {
+        const line = lines.get(p.id)!;
+        const notes = line.notes.join('; ') || null;
+        const existing = order.items.find(
+          (i) => i.productId === p.id && i.unitPrice === p.price,
+        );
+        if (existing) {
+          existing.quantity += line.quantity;
+          if (notes) existing.notes = existing.notes ? `${existing.notes}; ${notes}` : notes;
+          await manager.update(OrderItem, existing.id, {
+            quantity: existing.quantity,
+            notes: existing.notes,
+          });
+        } else {
+          const created = await manager.save(
+            manager.create(OrderItem, {
+              orderId,
+              productId: p.id,
+              product: p,
+              quantity: line.quantity,
+              unitPrice: p.price,
+              notes,
+            }),
+          );
+          created.product = p;
+          order.items.push(created);
+        }
+      }
+
+      order.total = order.items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
+      await manager.update(Order, orderId, { total: order.total });
+      return this.toStaffOrderView(order);
+    });
   }
 
   /** Confirm a pending order (guest orders only). */

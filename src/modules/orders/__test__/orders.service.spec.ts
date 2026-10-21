@@ -410,3 +410,80 @@ describe('OrdersService.history', () => {
     );
   });
 });
+
+describe('OrdersService.addItems', () => {
+  function buildAdd(order: unknown, products: unknown[]) {
+    const manager = {
+      findOne: vi.fn().mockResolvedValue(order),
+      find: vi.fn().mockResolvedValue(products),
+      create: vi.fn((_: unknown, data: unknown) => data),
+      save: vi.fn(async (data: any) => ({ id: 'new', servedQuantity: 0, ...data })),
+      update: vi.fn().mockResolvedValue(undefined),
+    };
+    const dataSource = {
+      transaction: vi.fn((cb: (m: typeof manager) => unknown) => cb(manager)),
+    };
+    const service = new OrdersService({} as never, {} as never, {} as never, {} as never, dataSource as never);
+    return { service, manager };
+  }
+
+  const p1 = { id: 'p1', name: 'Tea', price: 10000, isActive: true };
+  const p2 = { id: 'p2', name: 'Cake', price: 20000, isActive: true };
+  const openOrder = (status = OrderStatus.CONFIRMED) => ({
+    id: 'o1',
+    status,
+    total: 20000,
+    table: { name: 'T1' },
+    items: [
+      { id: 'i1', productId: 'p1', product: p1, quantity: 2, servedQuantity: 1, unitPrice: 10000, notes: null },
+    ],
+  });
+
+  it('merges a repeated product, adds a new line and recomputes the total', async () => {
+    const { service, manager } = buildAdd(openOrder(), [p1, p2]);
+    const result = await service.addItems('b1', 'o1', {
+      items: [
+        { productId: 'p1', quantity: 1 },
+        { productId: 'p2', quantity: 2, notes: 'no ice' },
+      ],
+    });
+    expect(result.total).toBe(10000 * 3 + 20000 * 2);
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0]).toMatchObject({ id: 'i1', quantity: 3, servedQuantity: 1 });
+    expect(manager.update).toHaveBeenCalledWith(expect.anything(), 'o1', { total: 70000 });
+  });
+
+  it('adds a separate line when the product price changed since ordering', async () => {
+    const { service } = buildAdd(openOrder(), [{ ...p1, price: 12000 }]);
+    const result = await service.addItems('b1', 'o1', { items: [{ productId: 'p1', quantity: 1 }] });
+    expect(result.items).toHaveLength(2);
+    expect(result.total).toBe(20000 + 12000);
+  });
+
+  it('404s for an unknown order', async () => {
+    const { service } = buildAdd(null, []);
+    await expect(
+      service.addItems('b1', 'x', { items: [{ productId: 'p1', quantity: 1 }] }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('409s for a paid order', async () => {
+    const { service, manager } = buildAdd(openOrder(OrderStatus.PAID), [p1]);
+    await expect(
+      service.addItems('b1', 'o1', { items: [{ productId: 'p1', quantity: 1 }] }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(manager.update).not.toHaveBeenCalled();
+  });
+
+  it('400s when a product is unavailable', async () => {
+    const { service } = buildAdd(openOrder(), [p1]);
+    await expect(
+      service.addItems('b1', 'o1', {
+        items: [
+          { productId: 'p1', quantity: 1 },
+          { productId: 'p2', quantity: 1 },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+});
