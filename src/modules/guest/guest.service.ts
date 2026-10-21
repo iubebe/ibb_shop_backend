@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  HttpException,
+  HttpStatus,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -23,6 +25,13 @@ import type {
 
 /** Orders a guest can still see for their table (not paid or cancelled). */
 const OPEN_STATUSES = [OrderStatus.PENDING_CONFIRMATION, OrderStatus.CONFIRMED];
+
+/**
+ * Orders a table may have waiting for staff confirmation. Anyone holding the
+ * table's QR can post, so this stops order spam without per-IP limits (a whole
+ * shop shares one Wi-Fi IP).
+ */
+const MAX_PENDING_ORDERS_PER_TABLE = 5;
 
 /** Menu cache TTL: 30 minutes. */
 const MENU_CACHE_TTL_SECONDS = 30 * 60;
@@ -97,6 +106,17 @@ export class GuestService {
   ): Promise<GuestOrderView> {
     const table = await this.findTable(qrToken);
 
+    const pending = await this.orders.countBy({
+      tableId: table.id,
+      status: OrderStatus.PENDING_CONFIRMATION,
+    });
+    if (pending >= MAX_PENDING_ORDERS_PER_TABLE) {
+      throw new HttpException(
+        'Too many orders are waiting for confirmation; please ask the staff',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
     // Same product listed twice: merge into one line (notes are joined).
     const lines = new Map<string, { quantity: number; notes: string[] }>();
     for (const item of dto.items) {
@@ -153,6 +173,17 @@ export class GuestService {
   async revalidateMenuCache(branchId: string): Promise<void> {
     const cacheKey = this.getMenuCacheKey(branchId);
     await this.redis.del(cacheKey);
+  }
+
+  /**
+   * Drops everything cached from products: the guest menu and the admin product
+   * list. Call after any product (or category removal) change.
+   */
+  async revalidateProductCaches(branchId: string): Promise<void> {
+    await this.redis.del(
+      this.getMenuCacheKey(branchId),
+      `${REDIS_KEY.PRODUCT_LIST}:${branchId}`,
+    );
   }
 
   private getMenuCacheKey(branchId: string): string {

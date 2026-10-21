@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, HttpException, NotFoundException } from '@nestjs/common';
 import { GuestService } from '../guest.service.js';
 
 const table = { id: 't1', branchId: 'b1', name: 'Bàn 1', qrToken: 'tok' };
@@ -8,7 +8,7 @@ const product = (id: string, price: number) => ({
   name: `P${id}`,
 });
 
-function build(opts: { table?: unknown; products?: unknown[] } = {}) {
+function build(opts: { table?: unknown; products?: unknown[]; pending?: number } = {}) {
   const tables = {
     findOneBy: vi.fn().mockResolvedValue('table' in opts ? opts.table : table),
   };
@@ -26,8 +26,9 @@ function build(opts: { table?: unknown; products?: unknown[] } = {}) {
     tables as never,
     {} as never,
     {} as never,
-    {} as never,
+    { countBy: vi.fn().mockResolvedValue(opts.pending ?? 0) } as never,
     dataSource as never,
+    {} as never,
   );
   return { service, manager };
 }
@@ -56,6 +57,16 @@ describe('GuestService', () => {
     expect(order.items).toHaveLength(2);
     expect(order.items[0]).toMatchObject({ quantity: 3, notes: 'ít đá' });
     expect(manager.find).toHaveBeenCalledOnce();
+  });
+
+  it('429s when the table already has too many orders waiting for confirmation', async () => {
+    const { service, manager } = build({ products: [product('a', 1)], pending: 5 });
+    const err = await service
+      .createOrder('tok', { items: [{ productId: 'a', quantity: 1 }] })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HttpException);
+    expect((err as HttpException).getStatus()).toBe(429);
+    expect(manager.find).not.toHaveBeenCalled();
   });
 
   it('rejects products that are missing, inactive or from another branch', async () => {

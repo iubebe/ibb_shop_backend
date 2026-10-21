@@ -40,6 +40,13 @@ export enum StockItemKind {
   MATERIAL = 'material',
 }
 
+/** Staff-drafted imports wait for admin review; admin-recorded ones are born confirmed. */
+export enum ImportReceiptStatus {
+  PENDING = 'pending',
+  CONFIRMED = 'confirmed',
+  REJECTED = 'rejected',
+}
+
 export enum StockItemMovementReason {
   IMPORT = 'import',
   ADJUSTMENT = 'adjustment',

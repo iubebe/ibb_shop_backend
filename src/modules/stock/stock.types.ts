@@ -1,4 +1,5 @@
 import type {
+  ImportReceiptStatus,
   StockItemKind,
   StockItemMovementReason,
 } from '../../database/enums.js';
@@ -13,6 +14,14 @@ export interface StockItemView {
   isLow: boolean;
   lastUnitCost: number | null;
   isActive: boolean;
+}
+
+/** Catalog entry without quantities or costs, for staff drafting an import. */
+export interface StockItemOptionView {
+  id: string;
+  name: string;
+  kind: StockItemKind;
+  unit: string;
 }
 
 export interface SupplierView {
@@ -39,6 +48,10 @@ export interface ImportReceiptView {
   note: string | null;
   totalCost: number;
   createdByName: string | null;
+  createdByUserId: string | null;
+  status: ImportReceiptStatus;
+  hasImage: boolean;
+  rejectReason: string | null;
   lines: ImportLineView[];
 }
 

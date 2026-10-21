@@ -50,7 +50,7 @@ function reflectorWith(meta: Record<string, unknown>) {
 
 describe('CsrfGuard', () => {
   const csrf = new CsrfService(authConfig);
-  const guard = new CsrfGuard(csrf);
+  const guard = new CsrfGuard(csrf, reflectorWith({}));
   const token = csrf.generate();
 
   it('lets safe methods through', () => {
@@ -68,6 +68,18 @@ describe('CsrfGuard', () => {
       cookies: { csrf_token: token },
     });
     expect(guard.canActivate(ok)).toBe(true);
+  });
+
+  it('requires a token on safe methods of @RequireCsrf() routes', () => {
+    const strict = new CsrfGuard(csrf, reflectorWith({ requireCsrf: true }));
+    const bad = httpCtx({ method: 'GET', headers: {}, cookies: {} });
+    expect(() => strict.canActivate(bad)).toThrow(ForbiddenException);
+    const ok = httpCtx({
+      method: 'GET',
+      headers: { 'x-csrf-token': token },
+      cookies: { csrf_token: token },
+    });
+    expect(strict.canActivate(ok)).toBe(true);
   });
 
   it('ignores WebSocket contexts', () => {
