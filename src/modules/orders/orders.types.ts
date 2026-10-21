@@ -5,6 +5,10 @@ export interface StaffOrderView {
   status: OrderStatus;
   tableId: string | null;
   tableName: string | null;
+  customerId: string | null;
+  customerName: string | null;
+  customerPhone: string | null;
+  customerAddress: string | null;
   total: number;
   createdAt: Date;
   confirmedAt: Date | null;

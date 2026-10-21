@@ -1,10 +1,12 @@
 import { AttendanceRecord } from './attendance-record.entity.js';
 import { Branch } from './branch.entity.js';
 import { Category } from './category.entity.js';
+import { Customer } from './customer.entity.js';
 import { Expense } from './expense.entity.js';
 import { DiningTable } from './dining-table.entity.js';
 import { ImportReceiptLine } from './import-receipt-line.entity.js';
 import { ImportReceipt } from './import-receipt.entity.js';
+import { WriteOff } from './write-off.entity.js';
 import { StockItemMovement } from './stock-item-movement.entity.js';
 import { StockItem } from './stock-item.entity.js';
 import { Supplier } from './supplier.entity.js';
@@ -28,6 +30,7 @@ export {
   AttendanceRecord,
   Branch,
   Category,
+  Customer,
   DiningTable,
   InventoryItem,
   Order,
@@ -44,6 +47,7 @@ export const entities = [
   Expense,
   ImportReceiptLine,
   ImportReceipt,
+  WriteOff,
   StockItemMovement,
   StockItem,
   Supplier,
@@ -51,6 +55,7 @@ export const entities = [
   User,
   DiningTable,
   Category,
+  Customer,
   Product,
   InventoryItem,
   StockMovement,

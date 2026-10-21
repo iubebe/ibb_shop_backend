@@ -12,9 +12,11 @@ import type { AuthUser } from '../../auth/auth.types.js';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator.js';
 import { Roles } from '../../auth/decorators/roles.decorator.js';
 import { UserRole } from '../../database/enums.js';
+import { AddOrderItemsDto } from './dto/add-order-items.dto.js';
 import { CreateOrderStaffDto } from './dto/create-order-staff.dto.js';
 import { OrderHistoryQuery } from './dto/order-history.query.js';
 import { ListOrdersQuery } from './dto/list-orders.query.js';
+import { UpdateOrderCustomerDto } from './dto/update-order-customer.dto.js';
 import { UpdateServedDto } from './dto/update-served.dto.js';
 import { OrdersService } from './orders.service.js';
 
@@ -41,6 +43,28 @@ export class OrdersController {
   @Post()
   create(@CurrentUser() user: AuthUser, @Body() dto: CreateOrderStaffDto) {
     return this.orders.createOrder(user.branchId, user.id, dto);
+  }
+
+  /** Add more products to an order that is still open (pending or confirmed). */
+  @Roles(UserRole.ADMIN, UserRole.STAFF)
+  @Post(':orderId/items')
+  addItems(
+    @CurrentUser() user: AuthUser,
+    @Param('orderId', ParseUUIDPipe) orderId: string,
+    @Body() dto: AddOrderItemsDto,
+  ) {
+    return this.orders.addItems(user.branchId, orderId, dto);
+  }
+
+  /** Edit customer name/phone/address while the order is not paid yet. */
+  @Roles(UserRole.ADMIN, UserRole.STAFF)
+  @Patch(':orderId/customer')
+  updateCustomer(
+    @CurrentUser() user: AuthUser,
+    @Param('orderId', ParseUUIDPipe) orderId: string,
+    @Body() dto: UpdateOrderCustomerDto,
+  ) {
+    return this.orders.updateCustomer(user.branchId, orderId, dto);
   }
 
   /** Confirm a pending order (guest orders only). */

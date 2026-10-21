@@ -6,6 +6,7 @@ import {
   IsBoolean,
   IsDateString,
   IsEnum,
+  IsInt,
   IsNumber,
   IsOptional,
   IsString,
@@ -49,6 +50,14 @@ export class CreateStockItemDto {
   @Min(0)
   @Max(MAX_QTY)
   lowStockThreshold?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => (value === '' ? null : value))
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(3650)
+  shelfLifeDays?: number | null;
 }
 
 export class UpdateStockItemDto {
@@ -76,6 +85,14 @@ export class UpdateStockItemDto {
   @Min(0)
   @Max(MAX_QTY)
   lowStockThreshold?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => (value === '' ? null : value))
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(3650)
+  shelfLifeDays?: number | null;
 
   @IsOptional()
   @IsBoolean()
