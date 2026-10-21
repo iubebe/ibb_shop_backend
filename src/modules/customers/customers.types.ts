@@ -10,3 +10,11 @@ export interface CustomerView {
   lastOrderAt: Date | null;
   createdAt: Date;
 }
+
+/** What staff get when looking a customer up by phone while creating an order. */
+export interface CustomerLookupView {
+  id: string;
+  name: string | null;
+  phone: string | null;
+  address: string | null;
+}

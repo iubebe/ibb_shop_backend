@@ -14,6 +14,7 @@ import { CurrentUser } from '../../auth/decorators/current-user.decorator.js';
 import { Roles } from '../../auth/decorators/roles.decorator.js';
 import { UserRole } from '../../database/enums.js';
 import { CustomersService } from './customers.service.js';
+import { LookupCustomerQuery } from './dto/lookup-customer.query.js';
 import { ListCustomersQuery } from './dto/list-customers.query.js';
 import { UpdateCustomerDto } from './dto/update-customer.dto.js';
 
@@ -25,6 +26,13 @@ export class CustomersController {
   @Get()
   list(@CurrentUser() user: AuthUser, @Query() query: ListCustomersQuery) {
     return this.customers.list(user.branchId, query.search);
+  }
+
+  /** Exact phone lookup to pre-fill the create-order form (admin, staff). Declared before `:id`. */
+  @Roles(UserRole.ADMIN, UserRole.STAFF)
+  @Get('lookup')
+  async lookup(@CurrentUser() user: AuthUser, @Query() query: LookupCustomerQuery) {
+    return { customer: await this.customers.findByPhone(user.branchId, query.phone) };
   }
 
   @Get(':id')

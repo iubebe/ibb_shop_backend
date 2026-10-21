@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { Customer } from '../../database/entities/customer.entity.js';
 import { OrderStatus } from '../../database/enums.js';
 import { toCustomerInfo } from './customer-info.js';
-import type { CustomerView } from './customers.types.js';
+import type { CustomerLookupView, CustomerView } from './customers.types.js';
 import type { UpdateCustomerDto } from './dto/update-customer.dto.js';
 
 interface CustomerRow {
@@ -36,6 +36,14 @@ export class CustomersService {
       );
     }
     return (await query.getRawMany<CustomerRow>()).map(view);
+  }
+
+  /** Exact match on the normalized phone; `null` when nobody has it. */
+  async findByPhone(branchId: string, phone: string): Promise<CustomerLookupView | null> {
+    const customer = await this.customers.findOne({ where: { branchId, phone } });
+    return customer
+      ? { id: customer.id, name: customer.name, phone: customer.phone, address: customer.address }
+      : null;
   }
 
   async get(branchId: string, id: string): Promise<CustomerView> {
