@@ -12,6 +12,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { CustomerInfoDto } from '../../customers/dto/customer-info.dto.js';
 
 export class CreateOrderItemDto {
   @IsUUID()
@@ -28,7 +29,7 @@ export class CreateOrderItemDto {
   notes?: string;
 }
 
-export class CreateOrderDto {
+export class CreateOrderDto extends CustomerInfoDto {
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(50)

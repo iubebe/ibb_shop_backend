@@ -16,6 +16,7 @@ import { AddOrderItemsDto } from './dto/add-order-items.dto.js';
 import { CreateOrderStaffDto } from './dto/create-order-staff.dto.js';
 import { OrderHistoryQuery } from './dto/order-history.query.js';
 import { ListOrdersQuery } from './dto/list-orders.query.js';
+import { UpdateOrderCustomerDto } from './dto/update-order-customer.dto.js';
 import { UpdateServedDto } from './dto/update-served.dto.js';
 import { OrdersService } from './orders.service.js';
 
@@ -53,6 +54,17 @@ export class OrdersController {
     @Body() dto: AddOrderItemsDto,
   ) {
     return this.orders.addItems(user.branchId, orderId, dto);
+  }
+
+  /** Edit customer name/phone/address while the order is not paid yet. */
+  @Roles(UserRole.ADMIN, UserRole.STAFF)
+  @Patch(':orderId/customer')
+  updateCustomer(
+    @CurrentUser() user: AuthUser,
+    @Param('orderId', ParseUUIDPipe) orderId: string,
+    @Body() dto: UpdateOrderCustomerDto,
+  ) {
+    return this.orders.updateCustomer(user.branchId, orderId, dto);
   }
 
   /** Confirm a pending order (guest orders only). */

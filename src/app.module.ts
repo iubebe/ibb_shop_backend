@@ -16,6 +16,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module.js';
 import { FinanceModule } from './modules/finance/finance.module.js';
 import { CategoriesModule } from './modules/categories/categories.module.js';
 import { ProductsModule } from './modules/products/products.module.js';
+import { CustomersModule } from './modules/customers/customers.module.js';
 import { OrdersModule } from './modules/orders/orders.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 import { AttendanceModule } from './modules/attendance/attendance.module.js';
@@ -35,6 +36,7 @@ import { StockModule } from './modules/stock/stock.module.js';
     ThrottleModule,
     AuthModule,
     GuestModule,
+    CustomersModule,
     OrdersModule,
     PaymentQrCodesModule,
     CategoriesModule,

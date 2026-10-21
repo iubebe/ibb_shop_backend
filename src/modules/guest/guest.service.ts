@@ -15,6 +15,7 @@ import { Order } from '../../database/entities/order.entity.js';
 import { Product } from '../../database/entities/product.entity.js';
 import { OrderStatus } from '../../database/enums.js';
 import { REDIS_KEY } from '../../constants/redis-key.constants.js';
+import { toCustomerInfo } from '../customers/customer-info.js';
 import { RedisService } from '../../redis/redis.service.js';
 import type { CreateOrderDto } from './dto/create-order.dto.js';
 import type {
@@ -143,10 +144,15 @@ export class GuestService {
         (sum, p) => sum + p.price * lines.get(p.id)!.quantity,
         0,
       );
+      // Unauthenticated input: keep it on the order only. Staff confirmation links the customer.
+      const customer = toCustomerInfo(dto);
       const created = await manager.save(
         manager.create(Order, {
           branchId: table.branchId,
           tableId: table.id,
+          customerName: customer.name,
+          customerPhone: customer.phone,
+          customerAddress: customer.address,
           status: OrderStatus.PENDING_CONFIRMATION,
           total,
         }),

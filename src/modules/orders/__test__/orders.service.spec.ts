@@ -11,6 +11,8 @@ function build(item: unknown) {
   const manager = {
     findOne: vi.fn().mockResolvedValue(item),
     update: vi.fn().mockResolvedValue(undefined),
+    create: vi.fn((_entity: unknown, data: unknown) => data),
+    save: vi.fn(async (data: object) => ({ id: 'c-new', ...data })),
   };
   const dataSource = {
     transaction: vi.fn((cb: (m: typeof manager) => unknown) => cb(manager)),
@@ -485,5 +487,68 @@ describe('OrdersService.addItems', () => {
         ],
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+});
+
+describe('OrdersService.updateCustomer', () => {
+  const order = (status: OrderStatus) => ({
+    id: 'o1',
+    status,
+    tableId: null,
+    table: null,
+    items: [],
+    customerId: null,
+    customerName: 'An',
+    customerPhone: null,
+    customerAddress: null,
+  });
+
+  it('keeps omitted fields and clears null ones', async () => {
+    const { service, manager } = build(order(OrderStatus.CONFIRMED));
+    const view = await service.updateCustomer('b1', 'o1', { customerAddress: '1 Le Loi', customerName: null });
+    expect(view).toMatchObject({ customerName: null, customerAddress: '1 Le Loi' });
+    expect(manager.update).toHaveBeenCalledWith(expect.anything(), 'o1', {
+      customerId: 'c-new',
+      customerName: null,
+      customerPhone: null,
+      customerAddress: '1 Le Loi',
+    });
+  });
+
+  it('409s on a paid or cancelled order', async () => {
+    for (const status of [OrderStatus.PAID, OrderStatus.CANCELLED]) {
+      const { service, manager } = build(order(status));
+      await expect(service.updateCustomer('b1', 'o1', { customerName: 'x' })).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(manager.update).not.toHaveBeenCalled();
+    }
+  });
+
+  it('404s for an unknown order', async () => {
+    const { service } = build(null);
+    await expect(service.updateCustomer('b1', 'o1', {})).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('OrdersService.confirm', () => {
+  it('links the customer typed on a guest order', async () => {
+    const { service, manager } = build({
+      id: 'o1',
+      status: OrderStatus.PENDING_CONFIRMATION,
+      table: null,
+      items: [],
+      customerId: null,
+      customerName: 'An',
+      customerPhone: null,
+      customerAddress: null,
+    });
+    const view = await service.confirm('b1', 'o1');
+    expect(view.customerId).toBe('c-new');
+    expect(manager.update).toHaveBeenCalledWith(
+      expect.anything(),
+      'o1',
+      expect.objectContaining({ status: OrderStatus.CONFIRMED, customerId: 'c-new' }),
+    );
   });
 });
