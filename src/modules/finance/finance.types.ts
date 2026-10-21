@@ -17,6 +17,8 @@ export interface FinanceTotals {
   /** Cash spent on stock imports (cash basis, not cost of goods sold). */
   importCost: number;
   operatingCost: number;
+  /** Cost of confirmed stock write-offs (spoiled/expired). Already inside `importCost` (cash basis), so not added to `totalCost`. */
+  writeOffLoss: number;
   /** Estimated: worked hours x hourly rate. */
   salaryCost: number;
   totalCost: number;
@@ -39,6 +41,7 @@ export interface FinanceDay {
   revenue: number;
   importCost: number;
   operatingCost: number;
+  writeOffLoss: number;
   salaryCost: number;
 }
 

@@ -11,6 +11,7 @@ import { OrderStatus, PaymentMethod, PaymentStatus } from '../enums.js';
 import { numericTransformer } from '../transformers.js';
 import { BaseEntity } from './base.entity.js';
 import { Branch } from './branch.entity.js';
+import { Customer } from './customer.entity.js';
 import { DiningTable } from './dining-table.entity.js';
 import { OrderItem } from './order-item.entity.js';
 import { User } from './user.entity.js';
@@ -41,6 +42,25 @@ export class Order extends BaseEntity {
   @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'createdByUserId' })
   createdByUser: Relation<User> | null;
+
+  /** Null when no customer info was given (e.g. guest orders). */
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  customerId: string | null;
+
+  @ManyToOne(() => Customer, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'customerId' })
+  customer: Relation<Customer> | null;
+
+  /** Customer details as entered on this order; editing the customer later leaves them untouched. */
+  @Column({ type: 'varchar', nullable: true })
+  customerName: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  customerPhone: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  customerAddress: string | null;
 
   @Column({
     type: 'enum',
