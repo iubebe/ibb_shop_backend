@@ -27,6 +27,14 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
+  async getBuffer(key: string): Promise<Buffer | null> {
+    return this.client.getBuffer(key);
+  }
+
+  async setBuffer(key: string, value: Buffer, ttlSeconds: number): Promise<void> {
+    await this.client.set(key, value, 'EX', ttlSeconds);
+  }
+
   async del(...keys: string[]): Promise<number> {
     return this.client.del(...keys);
   }

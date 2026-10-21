@@ -1,4 +1,5 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { Readable } from 'node:stream';
 import { PaymentQrCodesService } from '../payment-qr-codes.service.js';
 
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10]);
@@ -15,10 +16,20 @@ function build(existing: any = null) {
   const s3 = {
     upload: vi.fn(async (key: string) => ({ key, url: `https://media.example/${key}` })),
     delete: vi.fn().mockResolvedValue(undefined),
+    download: vi.fn(),
     keyFromPublicUrl: vi.fn((url: string) => (url.startsWith('https://media.example/') ? url.slice('https://media.example/'.length) : null)),
   };
-  const service = new PaymentQrCodesService(repo as never, s3 as never);
-  return { service, repo, s3 };
+  const store = new Map<string, Buffer>();
+  const redis = {
+    getJson: vi.fn(async (k: string) => (store.has(k) ? JSON.parse(store.get(k)!.toString()) : null)),
+    setJson: vi.fn(async (k: string, v: unknown) => void store.set(k, Buffer.from(JSON.stringify(v)))),
+    getBuffer: vi.fn(async (k: string) => store.get(k) ?? null),
+    setBuffer: vi.fn(async (k: string, v: Buffer) => void store.set(k, v)),
+    del: vi.fn(async (...keys: string[]) => keys.forEach((k) => store.delete(k))),
+  };
+  const logger = { setContext: vi.fn(), warn: vi.fn() };
+  const service = new PaymentQrCodesService(repo as never, s3 as never, redis as never, logger as never);
+  return { service, repo, s3, redis, logger };
 }
 
 describe('PaymentQrCodesService.create', () => {
@@ -102,5 +113,56 @@ describe('PaymentQrCodesService.remove', () => {
     const ctx = build(null);
     await expect(ctx.service.remove('b1', 'missing')).rejects.toThrow(NotFoundException);
     expect(ctx.repo.remove).not.toHaveBeenCalled();
+  });
+});
+
+describe('PaymentQrCodesService caching', () => {
+  it('serves the list from Redis after the first read', async () => {
+    const ctx = build();
+    ctx.repo.find.mockResolvedValue([{ id: 'qr1', branchId: 'b1', imagePath: 'b1/a.jpg' }]);
+
+    await ctx.service.list('b1');
+    const again = await ctx.service.list('b1');
+
+    expect(ctx.repo.find).toHaveBeenCalledTimes(1);
+    expect(again).toHaveLength(1);
+  });
+
+  it('drops the cached list when a code is updated', async () => {
+    const ctx = build({ id: 'qr1', branchId: 'b1', label: 'Old', isActive: true, imagePath: 'b1/a.jpg' });
+    await ctx.service.list('b1');
+
+    await ctx.service.update('b1', 'qr1', { isActive: false });
+    await ctx.service.list('b1');
+
+    expect(ctx.repo.find).toHaveBeenCalledTimes(2);
+  });
+
+  it('downloads the image once, then serves the bytes from Redis', async () => {
+    const ctx = build();
+    ctx.repo.find.mockResolvedValue([{ id: 'qr1', branchId: 'b1', imagePath: 'b1/a.jpg' }]);
+    ctx.s3.download = vi.fn(async () => ({ body: Readable.from(JPEG), contentType: 'image/jpeg' }));
+
+    await ctx.service.getImage('b1', 'qr1');
+    const second = await ctx.service.getImage('b1', 'qr1');
+
+    expect(ctx.s3.download).toHaveBeenCalledTimes(1);
+    expect(second.contentType).toBe('image/jpeg');
+    expect(Buffer.concat(await second.body.toArray())).toEqual(JPEG);
+  });
+
+  it('falls back to the database when Redis is down', async () => {
+    const ctx = build();
+    ctx.redis.getJson.mockRejectedValue(new Error('redis down'));
+    ctx.redis.setJson.mockRejectedValue(new Error('redis down'));
+    ctx.repo.find.mockResolvedValue([{ id: 'qr1' }]);
+
+    await expect(ctx.service.list('b1')).resolves.toHaveLength(1);
+    expect(ctx.logger.warn).toHaveBeenCalled();
+  });
+
+  it('404s an image that is not in the caller branch', async () => {
+    const ctx = build();
+    await expect(ctx.service.getImage('b1', 'nope')).rejects.toThrow(NotFoundException);
   });
 });
