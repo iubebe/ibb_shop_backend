@@ -86,3 +86,75 @@ describe('resolveCustomer', () => {
     ).rejects.toThrow('boom');
   });
 });
+
+describe('resolveCustomer concurrency', () => {
+  /**
+   * In-memory customers table with the (branchId, phone) unique index. Every call yields to
+   * the event loop first, so two concurrent resolves both miss the lookup before either inserts.
+   */
+  function buildSharedStore() {
+    const rows: { id: string; branchId: string; name: string | null; phone: string | null; address: string | null }[] = [];
+    const tick = () => new Promise((resolve) => setImmediate(resolve));
+    const manager = {
+      findOne: vi.fn(async (_entity: unknown, opts: { where: { branchId: string; phone: string } }) => {
+        await tick();
+        return rows.find((r) => r.branchId === opts.where.branchId && r.phone === opts.where.phone) ?? null;
+      }),
+      update: vi.fn(async (_entity: unknown, id: string, patch: object) => {
+        Object.assign(rows.find((r) => r.id === id)!, patch);
+      }),
+      create: vi.fn((_entity: unknown, data: object) => data),
+      save: vi.fn(async (data: { branchId: string; phone: string | null }) => {
+        await tick();
+        if (data.phone && rows.some((r) => r.branchId === data.branchId && r.phone === data.phone)) {
+          throw new QueryFailedError('insert', [], Object.assign(new Error('duplicate key'), { code: '23505' }));
+        }
+        const row = { id: `c${rows.length + 1}`, name: null, address: null, ...data };
+        rows.push(row);
+        return row;
+      }),
+      transaction: vi.fn((cb: (m: unknown) => unknown) => cb(manager)),
+    };
+    return { manager, rows };
+  }
+
+  it('two orders with the same new phone share one customer', async () => {
+    const { manager, rows } = buildSharedStore();
+    const info = (name: string) => ({ name, phone: '0901234567', address: null });
+
+    const [first, second] = await Promise.all([
+      resolveCustomer(manager as never, 'b1', info('An')),
+      resolveCustomer(manager as never, 'b1', info('Binh')),
+    ]);
+
+    expect(first).toBe(second);
+    expect(rows).toHaveLength(1);
+    // Both lookups missed, both inserts were attempted, and the loser re-read the winner.
+    expect(manager.save).toHaveBeenCalledTimes(2);
+    expect(manager.findOne).toHaveBeenCalledTimes(3);
+    // The loser's different name was applied to the shared customer.
+    expect(rows[0].name).toBe('Binh');
+  });
+
+  it('many concurrent orders on one new phone still create a single customer', async () => {
+    const { manager, rows } = buildSharedStore();
+    const ids = await Promise.all(
+      Array.from({ length: 8 }, (_, i) =>
+        resolveCustomer(manager as never, 'b1', { name: `N${i}`, phone: '0911222333', address: null }),
+      ),
+    );
+    expect(new Set(ids).size).toBe(1);
+    expect(rows).toHaveLength(1);
+  });
+
+  it('does not merge the same phone across branches', async () => {
+    const { manager, rows } = buildSharedStore();
+    const info = { name: 'An', phone: '0901234567', address: null };
+    const [a, b] = await Promise.all([
+      resolveCustomer(manager as never, 'b1', info),
+      resolveCustomer(manager as never, 'b2', info),
+    ]);
+    expect(a).not.toBe(b);
+    expect(rows).toHaveLength(2);
+  });
+});
