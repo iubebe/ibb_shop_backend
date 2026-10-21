@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.0](https://github.com/iubebe/ibb_shop_backend/compare/ibb_shop_backend-v0.4.0...ibb_shop_backend-v0.5.0) (2026-10-21)
+
+
+### Features
+
+* add item order ([14d7e9f](https://github.com/iubebe/ibb_shop_backend/commit/14d7e9f488025a78066218bba7a0d69fcad96bfa))
+* add order item ([3bab56d](https://github.com/iubebe/ibb_shop_backend/commit/3bab56d12c6463d8f239955b66ab952b9d16fdad))
+* customer info ([14d7e9f](https://github.com/iubebe/ibb_shop_backend/commit/14d7e9f488025a78066218bba7a0d69fcad96bfa))
+* customer info ([1ca633b](https://github.com/iubebe/ibb_shop_backend/commit/1ca633b5fed2a207fd0ff2f1320f7dc322d5bdcc))
+* customer lookup ([4d75c04](https://github.com/iubebe/ibb_shop_backend/commit/4d75c0442d598cacde5e35df9cc05a04875b7ba8))
+* cut off control ([14d7e9f](https://github.com/iubebe/ibb_shop_backend/commit/14d7e9f488025a78066218bba7a0d69fcad96bfa))
+* cut off management ([033b9fc](https://github.com/iubebe/ibb_shop_backend/commit/033b9fcae4ff2b195b1b9a2cd4ed5eee0181a38e))
+* unit test customer info ([bf17222](https://github.com/iubebe/ibb_shop_backend/commit/bf17222d06359422880aa916afde3ec64ad34b24))
+
 ## [0.4.0](https://github.com/iubebe/ibb_shop_backend/compare/ibb_shop_backend-v0.3.0...ibb_shop_backend-v0.4.0) (2026-10-19)
 
 
