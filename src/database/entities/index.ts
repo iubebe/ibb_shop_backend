@@ -5,6 +5,7 @@ import { Expense } from './expense.entity.js';
 import { DiningTable } from './dining-table.entity.js';
 import { ImportReceiptLine } from './import-receipt-line.entity.js';
 import { ImportReceipt } from './import-receipt.entity.js';
+import { WriteOff } from './write-off.entity.js';
 import { StockItemMovement } from './stock-item-movement.entity.js';
 import { StockItem } from './stock-item.entity.js';
 import { Supplier } from './supplier.entity.js';
@@ -44,6 +45,7 @@ export const entities = [
   Expense,
   ImportReceiptLine,
   ImportReceipt,
+  WriteOff,
   StockItemMovement,
   StockItem,
   Supplier,

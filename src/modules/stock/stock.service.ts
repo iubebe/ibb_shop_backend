@@ -104,6 +104,7 @@ export class StockService {
         kind: dto.kind,
         unit: dto.unit,
         lowStockThreshold: dto.lowStockThreshold ?? 0,
+        shelfLifeDays: dto.shelfLifeDays ?? null,
       }),
     );
     return itemView(saved);
@@ -569,7 +570,8 @@ export class StockService {
     if (clash) throw new ConflictException('Item name already exists');
   }
 
-  private async lockItem(
+  /** Also used by `WriteOffService`. */
+  async lockItem(
     manager: EntityManager,
     branchId: string,
     id: string,
@@ -583,7 +585,7 @@ export class StockService {
   }
 
   /** Change the (already locked) item's quantity and append the ledger row. */
-  private async applyMovement(
+  async applyMovement(
     manager: EntityManager,
     item: StockItem,
     m: {
@@ -650,6 +652,7 @@ function itemView(i: StockItem): StockItemView {
     lowStockThreshold: i.lowStockThreshold,
     isLow: i.lowStockThreshold > 0 && i.quantity <= i.lowStockThreshold,
     lastUnitCost: i.lastUnitCost,
+    shelfLifeDays: i.shelfLifeDays,
     isActive: i.isActive,
   };
 }

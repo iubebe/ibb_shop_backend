@@ -50,6 +50,22 @@ export enum ImportReceiptStatus {
 export enum StockItemMovementReason {
   IMPORT = 'import',
   ADJUSTMENT = 'adjustment',
+  WRITE_OFF = 'write_off',
+}
+
+/** Why stock was thrown away. */
+export enum WriteOffCause {
+  EXPIRED = 'expired',
+  SPOILED = 'spoiled',
+  DAMAGED = 'damaged',
+  OTHER = 'other',
+}
+
+/** Staff proposals wait for admin review; admin write-offs are born confirmed. */
+export enum WriteOffStatus {
+  PENDING = 'pending',
+  CONFIRMED = 'confirmed',
+  REJECTED = 'rejected',
 }
 
 /** Operating-expense categories (salary and stock imports are tracked elsewhere). */

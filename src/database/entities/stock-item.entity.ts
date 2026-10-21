@@ -50,6 +50,10 @@ export class StockItem extends BaseEntity {
   })
   lowStockThreshold: number;
 
+  /** Days the stock stays good after the latest import; null when unknown. */
+  @Column({ type: 'int', nullable: true })
+  shelfLifeDays: number | null;
+
   /** Unit cost of the latest import, a hint for the next receipt. */
   @Column({
     type: 'numeric',

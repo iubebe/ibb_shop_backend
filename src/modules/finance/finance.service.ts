@@ -47,6 +47,13 @@ const DAILY_SQL = `
       AND r."importedAt" >= ${RANGE_START} AND r."importedAt" < ${RANGE_END}
     GROUP BY 1
   ),
+  wo AS (
+    SELECT (w."writtenOffAt" AT TIME ZONE $4)::date AS day, SUM(w."totalCost") AS v
+    FROM write_offs w
+    WHERE w."branchId" = $1 AND w.status = 'confirmed'
+      AND w."writtenOffAt" >= ${RANGE_START} AND w."writtenOffAt" < ${RANGE_END}
+    GROUP BY 1
+  ),
   op AS (
     SELECT e."incurredOn" AS day, SUM(e.amount) AS v
     FROM expenses e
@@ -68,11 +75,13 @@ const DAILY_SQL = `
          COALESCE(rev.v, 0)::float8 AS revenue,
          COALESCE(imp.v, 0)::float8 AS "importCost",
          COALESCE(op.v, 0)::float8 AS "operatingCost",
+         COALESCE(wo.v, 0)::float8 AS "writeOffLoss",
          ROUND(COALESCE(sal.v, 0))::float8 AS "salaryCost"
   FROM days
   LEFT JOIN rev ON rev.day = days.day
   LEFT JOIN imp ON imp.day = days.day
   LEFT JOIN op ON op.day = days.day
+  LEFT JOIN wo ON wo.day = days.day
   LEFT JOIN sal ON sal.day = days.day
   ORDER BY days.day`;
 
@@ -148,6 +157,7 @@ export class FinanceService {
 
     const importCost = sum(daily.map((d) => d.importCost));
     const operatingCost = sum(daily.map((d) => d.operatingCost));
+    const writeOffLoss = sum(daily.map((d) => d.writeOffLoss));
     const salaryCost = sum(salary.map((s) => s.amount));
     const totalRevenue = sum(revenue.map((r) => r.amount));
     const totalCost = importCost + operatingCost + salaryCost;
@@ -160,6 +170,7 @@ export class FinanceService {
         paidOrders: sum(revenue.map((r) => r.orders)),
         importCost,
         operatingCost,
+        writeOffLoss,
         salaryCost,
         totalCost,
         profit: totalRevenue - totalCost,
