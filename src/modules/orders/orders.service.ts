@@ -16,6 +16,7 @@ import { resolveCustomer, toCustomerInfo } from '../customers/customer-info.js';
 import type { AddOrderItemsDto } from './dto/add-order-items.dto.js';
 import type { CreateOrderStaffDto } from './dto/create-order-staff.dto.js';
 import type { UpdateOrderCustomerDto } from './dto/update-order-customer.dto.js';
+import { isOnlineTable } from './online-table.js';
 import type { ServedItemView, StaffOrderView } from './orders.types.js';
 
 /** Staff-side order reads and serving progress, always scoped to the user's branch. */
@@ -89,6 +90,9 @@ export class OrdersService {
         0,
       );
       const customer = toCustomerInfo(dto);
+      if (dto.deliveryAt && !isOnlineTable(table.name)) {
+        throw new BadRequestException('Delivery time is only for online orders');
+      }
       const created = await manager.save(
         manager.create(Order, {
           branchId,
@@ -97,6 +101,7 @@ export class OrdersService {
           customerName: customer.name,
           customerPhone: customer.phone,
           customerAddress: customer.address,
+          deliveryAt: dto.deliveryAt ? new Date(dto.deliveryAt) : null,
           createdByUserId: userId,
           status: OrderStatus.CONFIRMED,
           confirmedAt: new Date(),
@@ -225,7 +230,14 @@ export class OrdersService {
       order.customerName = customer.name;
       order.customerPhone = customer.phone;
       order.customerAddress = customer.address;
+      if (dto.deliveryAt !== undefined) {
+        if (dto.deliveryAt && !isOnlineTable(order.table?.name)) {
+          throw new BadRequestException('Delivery time is only for online orders');
+        }
+        order.deliveryAt = dto.deliveryAt ? new Date(dto.deliveryAt) : null;
+      }
       await manager.update(Order, orderId, {
+        deliveryAt: order.deliveryAt,
         customerId: order.customerId,
         customerName: order.customerName,
         customerPhone: order.customerPhone,
@@ -354,6 +366,7 @@ export class OrdersService {
       customerName: order.customerName,
       customerPhone: order.customerPhone,
       customerAddress: order.customerAddress,
+      deliveryAt: order.deliveryAt,
       total: order.total,
       createdAt: order.createdAt,
       confirmedAt: order.confirmedAt,

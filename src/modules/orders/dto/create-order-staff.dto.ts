@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsDateString,
   IsInt,
   IsOptional,
   IsString,
@@ -39,4 +40,9 @@ export class CreateOrderStaffDto extends CustomerInfoDto {
   @ValidateNested({ each: true })
   @Type(() => CreateOrderItemDto)
   items: CreateOrderItemDto[];
+
+  /** ISO timestamp; online orders only. `null` clears. */
+  @IsOptional()
+  @IsDateString()
+  deliveryAt?: string | null;
 }
