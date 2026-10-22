@@ -9,6 +9,7 @@ export interface StaffOrderView {
   customerName: string | null;
   customerPhone: string | null;
   customerAddress: string | null;
+  deliveryAt: Date | null;
   total: number;
   createdAt: Date;
   confirmedAt: Date | null;
