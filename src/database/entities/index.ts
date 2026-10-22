@@ -19,6 +19,7 @@ import { StaffSchedule } from './staff-schedule.entity.js';
 import { StaffShiftRegistration } from './staff-shift-registration.entity.js';
 import { StockMovement } from './stock-movement.entity.js';
 import { User } from './user.entity.js';
+import { WifiNetwork } from './wifi-network.entity.js';
 
 export {
   Expense,
@@ -41,6 +42,7 @@ export {
   StaffShiftRegistration,
   StockMovement,
   User,
+  WifiNetwork,
 };
 
 export const entities = [
@@ -65,4 +67,5 @@ export const entities = [
   AttendanceRecord,
   StaffSchedule,
   StaffShiftRegistration,
+  WifiNetwork,
 ];
