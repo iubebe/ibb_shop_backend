@@ -62,6 +62,10 @@ export class Order extends BaseEntity {
   @Column({ type: 'varchar', nullable: true })
   customerAddress: string | null;
 
+  /** Requested delivery time; only set on orders for the "Online" table. */
+  @Column({ type: 'timestamptz', nullable: true })
+  deliveryAt: Date | null;
+
   @Column({
     type: 'enum',
     enum: OrderStatus,

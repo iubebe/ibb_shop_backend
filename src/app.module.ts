@@ -25,6 +25,7 @@ import { StaffSchedulesModule } from './modules/staff-schedules/staff-schedules.
 import { PaymentQrCodesModule } from './modules/payment-qr-codes/payment-qr-codes.module.js';
 import { BranchesModule } from './modules/branches/branches.module.js';
 import { StockModule } from './modules/stock/stock.module.js';
+import { WifiModule } from './modules/wifi/wifi.module.js';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { StockModule } from './modules/stock/stock.module.js';
     BranchesModule,
     StaffSchedulesModule,
     StockModule,
+    WifiModule,
     VersionModule,
   ],
   controllers: [AppController, HealthController],
