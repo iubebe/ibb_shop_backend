@@ -1,7 +1,10 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import QRCode from 'qrcode';
 import { TablesService } from '../tables.service.js';
 
-function build(opts: { found?: unknown; clash?: unknown; rows?: unknown[] } = {}) {
+function build(
+  opts: { found?: unknown; clash?: unknown; rows?: unknown[]; wifi?: unknown } = {},
+) {
   const tables = {
     find: vi.fn().mockResolvedValue(opts.rows ?? []),
     findOneBy: vi.fn((where: { id?: string; name?: unknown }) =>
@@ -14,7 +17,12 @@ function build(opts: { found?: unknown; clash?: unknown; rows?: unknown[] } = {}
     remove: vi.fn().mockResolvedValue(undefined),
   };
   const config = { get: vi.fn().mockReturnValue('https://guest.test/') };
-  return { service: new TablesService(tables as never, config as never), tables };
+  const wifi = { getActiveQr: vi.fn().mockResolvedValue(opts.wifi ?? null) };
+  return {
+    service: new TablesService(tables as never, config as never, wifi as never),
+    tables,
+    wifi,
+  };
 }
 
 describe('TablesService', () => {
@@ -53,10 +61,25 @@ describe('TablesService', () => {
   });
 
   it('renders a multi-page PDF', async () => {
-    const rows = Array.from({ length: 5 }, (_, i) => ({ id: `t${i}`, qrToken: `tok${i}` }));
+    const rows = Array.from({ length: 5 }, (_, i) => ({ id: `t${i}`, name: `Table ${i}`, qrToken: `tok${i}` }));
     const { service } = build({ rows });
     const pdf = await service.qrPdf('b1', { columns: 1, rows: 2 });
     expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
     expect(pdf.toString('latin1').match(/\/Type \/Page\b/g)).toHaveLength(3);
+  });
+
+  it('prints the table name and, when a WiFi network is active, its QR below the table QR', async () => {
+    const png = await QRCode.toBuffer('WIFI:T:WPA;S:cafe;P:secret123;;');
+    const rows = [{ id: 't1', name: 'Bàn Ế 1', qrToken: 'tok1' }];
+    const { service, wifi } = build({ rows, wifi: { ssid: 'cafe', png } });
+    const withWifi = await service.qrPdf('b1', {});
+    expect(wifi.getActiveQr).toHaveBeenCalledWith('b1');
+    expect(withWifi.subarray(0, 5).toString()).toBe('%PDF-');
+    const images = (pdf: Buffer) => pdf.toString('latin1').match(/\/Subtype \/Image/g)!.length;
+
+    const { service: plain } = build({ rows });
+    const without = await plain.qrPdf('b1', {});
+    // table QR + WiFi QR instead of the table QR alone
+    expect(images(withWifi)).toBe(images(without) * 2);
   });
 });

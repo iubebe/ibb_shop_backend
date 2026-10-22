@@ -79,3 +79,10 @@ export enum ExpenseCategory {
   MARKETING = 'marketing',
   OTHER = 'other',
 }
+
+/** `T:` field of the WiFi QR payload. */
+export enum WifiSecurity {
+  WPA = 'WPA',
+  WEP = 'WEP',
+  OPEN = 'nopass',
+}
