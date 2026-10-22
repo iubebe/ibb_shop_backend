@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.0](https://github.com/iubebe/ibb_shop_backend/compare/ibb_shop_backend-v0.6.0...ibb_shop_backend-v0.7.0) (2026-10-22)
+
+
+### Features
+
+* finance report export ([fa5e2e9](https://github.com/iubebe/ibb_shop_backend/commit/fa5e2e935ef0ca5f34c6b32b64d46c747997f336))
+* qr wifi management ([bc40789](https://github.com/iubebe/ibb_shop_backend/commit/bc407898ccefde4171a7868cd5d482c9e98b3ed9))
+
+
+### Bug Fixes
+
+* security cva ([9d2b4f4](https://github.com/iubebe/ibb_shop_backend/commit/9d2b4f42b8c725aebf98c00ef76de973e3ca8bb0))
+
 ## [0.6.0](https://github.com/iubebe/ibb_shop_backend/compare/ibb_shop_backend-v0.5.0...ibb_shop_backend-v0.6.0) (2026-10-21)
 
 
