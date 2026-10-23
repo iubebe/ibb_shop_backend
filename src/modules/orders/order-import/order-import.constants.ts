@@ -5,7 +5,13 @@ export const ORDER_IMPORT_COLUMNS = {
   product: 'Món',
   quantity: 'Số lượng',
   notes: 'Ghi chú',
+  /** Optional. Filled = an order that already happened (paid, admin only). */
+  date: 'Ngày',
+  /** Optional, only with a date. */
+  payment: 'Thanh toán',
 } as const;
+
+export const PAYMENT_LABELS = { cash: 'Tiền mặt', transfer: 'Chuyển khoản' } as const;
 
 export const ORDER_IMPORT_FIELD = 'file';
 export const ORDER_IMPORT_MAX_BYTES = 2 * 1_048_576;

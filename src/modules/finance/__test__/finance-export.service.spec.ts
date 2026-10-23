@@ -12,6 +12,8 @@ import type {
   FinanceSummary,
   RoiSummary,
 } from '../finance.types.js';
+import type { BreakEvenService } from '../break-even.service.js';
+import { computeBreakEven } from '../break-even.service.js';
 import type { InvestmentsService } from '../investments.service.js';
 
 const summary: FinanceSummary = {
@@ -90,7 +92,18 @@ function service(data: FinanceSummary = summary, roiData: RoiSummary = roi) {
   const investments = {
     roi: vi.fn().mockResolvedValue(roiData),
   } as unknown as InvestmentsService;
-  return new FinanceExportService(finance, investments);
+  const breakEven = {
+    breakEven: vi
+      .fn()
+      .mockResolvedValue(
+        computeBreakEven(
+          { from: data.from, to: data.to },
+          data.totals,
+          roiData.totalInvested,
+        ),
+      ),
+  } as unknown as BreakEvenService;
+  return new FinanceExportService(finance, investments, breakEven);
 }
 
 describe('FinanceExportService', () => {
@@ -105,6 +118,7 @@ describe('FinanceExportService', () => {
       'Lương',
       'Chi phí vận hành',
       'Đầu tư & ROI',
+      'Hòa vốn & KPI',
     ]);
     expect(wb.getWorksheet('Tổng quan')!.getCell('B5').value).toBe(300_000);
     expect(wb.getWorksheet('Theo ngày')!.rowCount).toBe(4);
@@ -120,13 +134,13 @@ describe('FinanceExportService', () => {
     const zip = await JSZip.loadAsync(buffer);
     const files = Object.keys(zip.files);
 
-    // overview: cost pie, method pie, category bar; daily: 2; salary: 1; investments pie: 1.
-    expect(files.filter((f) => /^xl\/charts\/chart\d+\.xml$/.test(f))).toHaveLength(7);
+    // overview: cost pie, method pie, category bar; daily: 2; salary: 1; investments pie: 1; break-even: 1.
+    expect(files.filter((f) => /^xl\/charts\/chart\d+\.xml$/.test(f))).toHaveLength(8);
     const types = await zip.file('[Content_Types].xml')!.async('string');
-    expect(types.match(/drawingml\.chart\+xml/g)).toHaveLength(7);
-    expect(types.match(/drawing\+xml/g)).toHaveLength(4);
+    expect(types.match(/drawingml\.chart\+xml/g)).toHaveLength(8);
+    expect(types.match(/drawing\+xml/g)).toHaveLength(5);
 
-    for (const sheet of [1, 2, 3, 5]) {
+    for (const sheet of [1, 2, 3, 5, 6]) {
       const xml = await zip.file(`xl/worksheets/sheet${sheet}.xml`)!.async('string');
       expect(xml).toContain('<drawing r:id="rIdFinanceDrawing"/>');
       expect(xml.indexOf('<drawing ')).toBeLessThan(xml.indexOf('</worksheet>'));
@@ -157,6 +171,6 @@ describe('FinanceExportService', () => {
     const buffer = await service(empty, noRoi).exportXlsx('b1', '2026-10-01', '2026-10-04');
     const zip = await JSZip.loadAsync(buffer);
     const charts = Object.keys(zip.files).filter((f) => /^xl\/charts\/chart\d+\.xml$/.test(f));
-    expect(charts).toHaveLength(1);
+    expect(charts).toHaveLength(2);
   });
 });

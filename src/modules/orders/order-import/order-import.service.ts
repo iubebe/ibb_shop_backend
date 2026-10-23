@@ -5,7 +5,8 @@ import { DiningTable } from '../../../database/entities/dining-table.entity.js';
 import { OrderItem } from '../../../database/entities/order-item.entity.js';
 import { Order } from '../../../database/entities/order.entity.js';
 import { Product } from '../../../database/entities/product.entity.js';
-import { OrderStatus } from '../../../database/enums.js';
+import { OrderStatus, PaymentMethod, UserRole } from '../../../database/enums.js';
+import { BackdatedOrdersService } from '../backdated/backdated-orders.service.js';
 import {
   ORDER_IMPORT_MAX_ERRORS,
   ORDER_IMPORT_MAX_ITEMS_PER_ORDER,
@@ -24,6 +25,8 @@ export interface ImportedOrderSummary {
   tableName: string;
   itemCount: number;
   total: number;
+  /** Set for orders recorded in the past (paid); null for live orders. */
+  orderedAt: Date | null;
 }
 
 export interface OrderImportResult {
@@ -44,6 +47,8 @@ interface ResolvedOrder {
   tableId: string;
   tableName: string;
   rows: ResolvedRow[];
+  orderedAt: Date | null;
+  paymentMethod: PaymentMethod | null;
 }
 
 /** Bulk-creates confirmed orders from an Excel sheet, all or nothing. */
@@ -53,6 +58,7 @@ export class OrderImportService {
     @InjectRepository(DiningTable) private readonly tables: Repository<DiningTable>,
     @InjectRepository(Product) private readonly products: Repository<Product>,
     private readonly dataSource: DataSource,
+    private readonly backdated: BackdatedOrdersService,
   ) {}
 
   /** Sheet with the header row and the branch's table and product names to copy from. */
@@ -77,6 +83,7 @@ export class OrderImportService {
   async import(
     branchId: string,
     userId: string,
+    role: UserRole,
     buffer: Buffer,
   ): Promise<OrderImportResult> {
     const parsed = await parseOrderImportFile(buffer);
@@ -113,8 +120,21 @@ export class OrderImportService {
         errors.push({ row: rows[0].rowNumber, message: `Table not found: "${tableName}"` });
       }
 
+      const first = rows[0];
       const resolved: ResolvedRow[] = [];
+      if (first.orderedAt && role !== UserRole.ADMIN) {
+        errors.push({ row: first.rowNumber, message: 'Chỉ admin được nhập đơn có ngày' });
+      }
       for (const row of rows) {
+        if (
+          row.orderedAt?.getTime() !== first.orderedAt?.getTime() ||
+          row.paymentMethod !== first.paymentMethod
+        ) {
+          errors.push({
+            row: row.rowNumber,
+            message: `Order "${orderKey}" must use the same date and payment on every line`,
+          });
+        }
         if (normalize(row.table) !== normalize(tableName)) {
           errors.push({
             row: row.rowNumber,
@@ -144,7 +164,14 @@ export class OrderImportService {
       }
 
       if (table && table !== 'ambiguous') {
-        orders.push({ orderKey, tableId: table.id, tableName: table.name, rows: resolved });
+        orders.push({
+          orderKey,
+          tableId: table.id,
+          tableName: table.name,
+          rows: resolved,
+          orderedAt: first.orderedAt,
+          paymentMethod: first.paymentMethod,
+        });
       }
     }
 
@@ -156,42 +183,79 @@ export class OrderImportService {
       });
     }
 
+    // Past orders and live orders are written in one transaction so a failure leaves nothing behind.
     return this.dataSource.transaction(async (manager) => {
-      const drafts = orders.map((order) =>
-        manager.create(Order, {
-          branchId,
-          tableId: order.tableId,
-          createdByUserId: userId,
-          status: OrderStatus.CONFIRMED,
-          confirmedAt: new Date(),
-          total: sumTotal(order.rows),
-        }),
-      );
-      const savedOrders = await manager.save(drafts);
+      const live = orders.filter((o) => !o.orderedAt);
+      const past = orders.filter((o) => o.orderedAt);
 
-      const items = savedOrders.flatMap((saved, index) =>
-        mergeLines(orders[index].rows).map((line) =>
-          manager.create(OrderItem, {
-            orderId: saved.id,
-            productId: line.productId,
-            quantity: line.quantity,
-            unitPrice: line.productPrice,
-            notes: line.notes,
+      const summaries = new Map<ResolvedOrder, ImportedOrderSummary>();
+      if (live.length > 0) {
+        const savedLive = await manager.save(
+          live.map((order) =>
+            manager.create(Order, {
+              branchId,
+              tableId: order.tableId,
+              createdByUserId: userId,
+              status: OrderStatus.CONFIRMED,
+              confirmedAt: new Date(),
+              total: sumTotal(order.rows),
+            }),
+          ),
+        );
+        await manager.save(
+          savedLive.flatMap((saved, index) =>
+            mergeLines(live[index].rows).map((line) =>
+              manager.create(OrderItem, {
+                orderId: saved.id,
+                productId: line.productId,
+                quantity: line.quantity,
+                unitPrice: line.productPrice,
+                notes: line.notes,
+              }),
+            ),
+          ),
+        );
+        savedLive.forEach((saved, index) =>
+          summaries.set(live[index], {
+            id: saved.id,
+            orderKey: live[index].orderKey,
+            tableName: live[index].tableName,
+            itemCount: mergeLines(live[index].rows).length,
+            total: saved.total,
+            orderedAt: null,
           }),
-        ),
-      );
-      await manager.save(items);
+        );
+      }
 
-      return {
-        created: savedOrders.length,
-        orders: savedOrders.map((saved, index) => ({
-          id: saved.id,
-          orderKey: orders[index].orderKey,
-          tableName: orders[index].tableName,
-          itemCount: mergeLines(orders[index].rows).length,
-          total: saved.total,
-        })),
-      };
+      if (past.length > 0) {
+        const savedPast = await this.backdated.createMany(
+          branchId,
+          userId,
+          past.map((order) => ({
+            tableId: order.tableId,
+            orderedAt: order.orderedAt!,
+            paymentMethod: order.paymentMethod ?? PaymentMethod.CASH,
+            lines: order.rows.map((r) => ({
+              productId: r.productId,
+              quantity: r.quantity,
+              notes: r.notes,
+            })),
+          })),
+          manager,
+        );
+        savedPast.forEach((saved, index) =>
+          summaries.set(past[index], {
+            id: saved.id,
+            orderKey: past[index].orderKey,
+            tableName: saved.tableName,
+            itemCount: saved.itemCount,
+            total: saved.total,
+            orderedAt: saved.orderedAt,
+          }),
+        );
+      }
+
+      return { created: orders.length, orders: orders.map((o) => summaries.get(o)!) };
     });
   }
 }
