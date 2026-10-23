@@ -1,4 +1,8 @@
-import type { ExpenseCategory, PaymentMethod } from '../../database/enums.js';
+import type {
+  ExpenseCategory,
+  InvestmentCategory,
+  PaymentMethod,
+} from '../../database/enums.js';
 
 export interface ExpenseView {
   id: string;
@@ -57,4 +61,40 @@ export interface FinanceSummary {
   /** Staff who worked in the range but have no hourly rate (salary understated). */
   staffWithoutRate: number;
   daily: FinanceDay[];
+}
+
+export interface InvestmentView {
+  id: string;
+  name: string;
+  category: InvestmentCategory;
+  amount: number;
+  /** `YYYY-MM-DD` */
+  investedOn: string;
+  note: string | null;
+  createdByName: string | null;
+  createdAt: Date;
+}
+
+/**
+ * Shop-level return on the capital invested up to the end of `[from, to)`:
+ * profit of the range (see `FinanceTotals.profit`) over that capital.
+ * Profit is not split per item, so items only show their share of the capital.
+ */
+export interface RoiSummary {
+  /** `YYYY-MM-DD`, inclusive. */
+  from: string;
+  /** `YYYY-MM-DD`, exclusive. */
+  to: string;
+  /** Sum of investments made before `to`. */
+  totalInvested: number;
+  /** Part of `totalInvested` spent inside the range. */
+  investedInRange: number;
+  /** Profit of the range. */
+  profit: number;
+  /** `profit / totalInvested * 100`; `null` when nothing is invested. */
+  roiPercent: number | null;
+  /** Months to earn back `totalInvested` at this range's profit rate; `null` when profit is not positive. */
+  paybackMonths: number | null;
+  byCategory: { category: InvestmentCategory; amount: number }[];
+  items: (InvestmentView & { sharePercent: number })[];
 }

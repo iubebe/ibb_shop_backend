@@ -1,9 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import ExcelJS from 'exceljs';
-import { ExpenseCategory, PaymentMethod } from '../../database/enums.js';
+import {
+  ExpenseCategory,
+  InvestmentCategory,
+  PaymentMethod,
+} from '../../database/enums.js';
 import { addCharts, type ChartSpec } from './finance-export.charts.js';
 import { FinanceService } from './finance.service.js';
-import type { ExpenseView, FinanceSummary } from './finance.types.js';
+import { InvestmentsService } from './investments.service.js';
+import type {
+  ExpenseView,
+  FinanceSummary,
+  RoiSummary,
+} from './finance.types.js';
 
 const CATEGORY_LABEL: Record<ExpenseCategory, string> = {
   [ExpenseCategory.RENT]: 'Mặt bằng',
@@ -14,6 +23,15 @@ const CATEGORY_LABEL: Record<ExpenseCategory, string> = {
   [ExpenseCategory.MAINTENANCE]: 'Sửa chữa, bảo trì',
   [ExpenseCategory.MARKETING]: 'Quảng cáo',
   [ExpenseCategory.OTHER]: 'Khác',
+};
+
+const INVESTMENT_LABEL: Record<InvestmentCategory, string> = {
+  [InvestmentCategory.RENOVATION]: 'Thi công, cải tạo',
+  [InvestmentCategory.EQUIPMENT]: 'Máy móc, thiết bị',
+  [InvestmentCategory.FURNITURE]: 'Bàn ghế, nội thất',
+  [InvestmentCategory.TECHNOLOGY]: 'Công nghệ, phần mềm',
+  [InvestmentCategory.DEPOSIT]: 'Đặt cọc',
+  [InvestmentCategory.OTHER]: 'Khác',
 };
 
 const METHOD_LABEL: Record<PaymentMethod, string> = {
@@ -43,6 +61,7 @@ const SHEET = {
   daily: { index: 2, name: 'Theo ngày' },
   salary: { index: 3, name: 'Lương' },
   expenses: { index: 4, name: 'Chi phí vận hành' },
+  investments: { index: 5, name: 'Đầu tư & ROI' },
 } as const;
 
 /** `2026-10-17` -> `17/10/2026` */
@@ -53,20 +72,25 @@ const formatShortDay = (day: string) => formatDay(day).slice(0, 5);
 /** Excel report of the finance summary with native charts (admin only). */
 @Injectable()
 export class FinanceExportService {
-  constructor(private readonly finance: FinanceService) {}
+  constructor(
+    private readonly finance: FinanceService,
+    private readonly investments: InvestmentsService,
+  ) {}
 
   async exportXlsx(branchId: string, from: string, to: string): Promise<Buffer> {
-    const [summary, expenses] = await Promise.all([
+    const [summary, expenses, roi] = await Promise.all([
       this.finance.summary(branchId, from, to),
       this.finance.listExpenses(branchId, from, to),
+      this.investments.roi(branchId, from, to),
     ]);
 
     const workbook = new ExcelJS.Workbook();
     const charts: ChartSpec[] = [];
-    this.overviewSheet(workbook, summary, charts);
+    this.overviewSheet(workbook, summary, roi, charts);
     this.dailySheet(workbook, summary, charts);
     this.salarySheet(workbook, summary, charts);
     this.expensesSheet(workbook, expenses);
+    this.investmentsSheet(workbook, roi, charts);
 
     const plain = Buffer.from(await workbook.xlsx.writeBuffer());
     return addCharts(plain, charts);
@@ -75,6 +99,7 @@ export class FinanceExportService {
   private overviewSheet(
     workbook: ExcelJS.Workbook,
     data: FinanceSummary,
+    roi: RoiSummary,
     charts: ChartSpec[],
   ) {
     const { index, name } = SHEET.overview;
@@ -98,7 +123,11 @@ export class FinanceExportService {
       ['Tổng chi', t.totalCost],
       ['Lợi nhuận', t.profit],
       ['Hao hụt / hủy hàng (đã nằm trong nhập hàng)', t.writeOffLoss],
+      ['Vốn đầu tư (lũy kế đến cuối kỳ)', roi.totalInvested],
+      ['ROI (%) = lợi nhuận kỳ / vốn đầu tư', roi.roiPercent ?? 0],
     ]).next;
+    sheet.getCell('B14').numFmt = '0.0';
+    if (roi.roiPercent === null) sheet.getCell('B14').value = 'Chưa có vốn';
     sheet.getCell('B6').numFmt = '0';
     sheet.getRow(11).font = { bold: true };
     if (data.staffWithoutRate > 0) {
@@ -275,6 +304,73 @@ export class FinanceExportService {
       ],
       anchor: { col: 5, row: 1, cols: 9, rows: Math.max(14, data.salary.length * 2) },
     });
+  }
+
+  private investmentsSheet(
+    workbook: ExcelJS.Workbook,
+    roi: RoiSummary,
+    charts: ChartSpec[],
+  ) {
+    const { index, name } = SHEET.investments;
+    const sheet = workbook.addWorksheet(name);
+    sheet.columns = [
+      { header: 'Ngày', width: 14 },
+      { header: 'Hạng mục', width: 30 },
+      { header: 'Nhóm', width: 22 },
+      { header: 'Số tiền', width: 16, style: { numFmt: MONEY } },
+      { header: 'Tỷ trọng vốn (%)', width: 16, style: { numFmt: '0.0' } },
+      { header: 'Ghi chú', width: 30 },
+    ];
+    for (const i of roi.items) {
+      sheet.addRow([
+        formatDay(i.investedOn),
+        i.name,
+        INVESTMENT_LABEL[i.category],
+        i.amount,
+        i.sharePercent,
+        i.note ?? '',
+      ]);
+    }
+    sheet.addRow(['Tổng', '', '', roi.totalInvested]);
+    sheet.lastRow!.font = { bold: true };
+    sheet.getRow(1).font = { bold: true };
+    sheet.views = [{ state: 'frozen', ySplit: 1 }];
+
+    let row = sheet.rowCount + 2;
+    const lastDay = lastInclusiveDay(roi.to);
+    sheet.getCell(`A${row}`).value =
+      `ROI kỳ ${formatDay(roi.from)} - ${formatDay(lastDay)}`;
+    sheet.getCell(`A${row}`).font = { bold: true };
+    row += 1;
+    const summaryTable = writeTable(sheet, row, ['Chỉ tiêu', 'Giá trị'], [
+      ['Vốn đầu tư (lũy kế đến cuối kỳ)', roi.totalInvested],
+      ['Đầu tư trong kỳ', roi.investedInRange],
+      ['Lợi nhuận kỳ', roi.profit],
+      ['ROI (%)', roi.roiPercent ?? 0],
+      ['Thời gian hoàn vốn (tháng)', roi.paybackMonths ?? 0],
+    ]);
+    sheet.getCell(`B${row + 4}`).numFmt = '0.0';
+    sheet.getCell(`B${row + 5}`).numFmt = '0.0';
+    if (roi.roiPercent === null) sheet.getCell(`B${row + 4}`).value = 'Chưa có vốn';
+    if (roi.paybackMonths === null) {
+      sheet.getCell(`B${row + 5}`).value = 'Chưa hoàn vốn / chưa có lãi';
+    }
+    row = summaryTable.next;
+    sheet.getCell(`A${row + 1}`).value =
+      'ROI = lợi nhuận của kỳ / vốn đầu tư. Lợi nhuận tính cho cả cửa hàng, không chia theo từng hạng mục. Hoàn vốn = vốn / (lợi nhuận kỳ quy ra 30 ngày).';
+    sheet.getCell(`A${row + 1}`).font = { italic: true };
+    row += 3;
+
+    if (roi.byCategory.length === 0) return;
+    const categories = writeTable(
+      sheet,
+      row,
+      ['Vốn theo nhóm', 'Số tiền'],
+      roi.byCategory.map((c) => [INVESTMENT_LABEL[c.category], c.amount]),
+    );
+    charts.push(
+      pieChart(index, name, 'Cơ cấu vốn đầu tư', categories, { col: 7, row: 1 }),
+    );
   }
 
   private expensesSheet(workbook: ExcelJS.Workbook, expenses: ExpenseView[]) {

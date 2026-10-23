@@ -80,6 +80,16 @@ export enum ExpenseCategory {
   OTHER = 'other',
 }
 
+/** Capital investments (fit-out, equipment, ...): one-off spend tracked for ROI, not an operating cost. */
+export enum InvestmentCategory {
+  RENOVATION = 'renovation',
+  EQUIPMENT = 'equipment',
+  FURNITURE = 'furniture',
+  TECHNOLOGY = 'technology',
+  DEPOSIT = 'deposit',
+  OTHER = 'other',
+}
+
 /** `T:` field of the WiFi QR payload. */
 export enum WifiSecurity {
   WPA = 'WPA',
