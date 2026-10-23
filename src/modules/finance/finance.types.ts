@@ -98,3 +98,39 @@ export interface RoiSummary {
   byCategory: { category: InvestmentCategory; amount: number }[];
   items: (InvestmentView & { sharePercent: number })[];
 }
+
+/** Operating break-even of `[from, to)` plus suggested KPI targets for the same month. */
+export interface BreakEvenSummary {
+  from: string;
+  to: string;
+  days: number;
+  /** Operating expenses + estimated salary of the range. */
+  fixedCost: number;
+  /** `importCost / revenue`; `null` without revenue. */
+  variableCostRatio: number | null;
+  /** `1 - variableCostRatio`; `null` without revenue. */
+  contributionMarginRatio: number | null;
+  /** `revenue / paidOrders`; `null` without paid orders. */
+  avgOrderValue: number | null;
+  /** `fixedCost / contributionMarginRatio`; `null` when the margin is not positive. */
+  breakEvenRevenue: number | null;
+  breakEvenRevenuePerDay: number | null;
+  breakEvenOrdersPerDay: number | null;
+  revenue: number;
+  paidOrders: number;
+  profit: number;
+  /** `revenue / breakEvenRevenue * 100`; `null` when there is no break-even. */
+  breakEvenProgressPercent: number | null;
+  kpi: {
+    /** Monthly profit that pays back `totalInvested` in `paybackTargetMonths`; 0 without capital. */
+    targetProfit: number;
+    paybackTargetMonths: number;
+    totalInvested: number;
+    targetRevenue: number | null;
+    targetRevenuePerDay: number | null;
+    targetOrders: number | null;
+    targetOrdersPerDay: number | null;
+    /** Import spend to stay under at `targetRevenue`, keeping today's cost ratio. */
+    maxImportCost: number | null;
+  };
+}

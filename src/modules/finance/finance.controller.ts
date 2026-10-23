@@ -23,6 +23,7 @@ import {
   UpdateExpenseDto,
   UpdateInvestmentDto,
 } from './dto/finance.dto.js';
+import { BreakEvenService } from './break-even.service.js';
 import { FinanceExportService } from './finance-export.service.js';
 import { FinanceService } from './finance.service.js';
 import { InvestmentsService } from './investments.service.js';
@@ -38,6 +39,7 @@ export class FinanceController {
     private readonly finance: FinanceService,
     private readonly exporter: FinanceExportService,
     private readonly investments: InvestmentsService,
+    private readonly breakEven: BreakEvenService,
   ) {}
 
   @Get('summary')
@@ -95,6 +97,12 @@ export class FinanceController {
   @Get('roi')
   roi(@CurrentUser() user: AuthUser, @Query() query: RangeQuery) {
     return this.investments.roi(user.branchId, query.from, query.to);
+  }
+
+  /** Operating break-even and suggested KPIs for `[from, to)`. */
+  @Get('break-even')
+  breakEvenOf(@CurrentUser() user: AuthUser, @Query() query: RangeQuery) {
+    return this.breakEven.breakEven(user.branchId, query.from, query.to);
   }
 
   @Get('investments')
