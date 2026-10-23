@@ -3,6 +3,7 @@ import { Branch } from './branch.entity.js';
 import { Category } from './category.entity.js';
 import { Customer } from './customer.entity.js';
 import { Expense } from './expense.entity.js';
+import { Investment } from './investment.entity.js';
 import { DiningTable } from './dining-table.entity.js';
 import { ImportReceiptLine } from './import-receipt-line.entity.js';
 import { ImportReceipt } from './import-receipt.entity.js';
@@ -23,6 +24,7 @@ import { WifiNetwork } from './wifi-network.entity.js';
 
 export {
   Expense,
+  Investment,
   ImportReceiptLine,
   ImportReceipt,
   StockItemMovement,
@@ -47,6 +49,7 @@ export {
 
 export const entities = [
   Expense,
+  Investment,
   ImportReceiptLine,
   ImportReceipt,
   WriteOff,
