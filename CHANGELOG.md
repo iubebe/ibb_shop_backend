@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.0](https://github.com/iubebe/ibb_shop_backend/compare/ibb_shop_backend-v0.7.0...ibb_shop_backend-v0.8.0) (2026-10-22)
+
+
+### Features
+
+* delivery time order online ([33ae2bc](https://github.com/iubebe/ibb_shop_backend/commit/33ae2bc175eb73858d8a1ac2c1fb0a3d72e1ad06))
+* delivery time order online ([11279f3](https://github.com/iubebe/ibb_shop_backend/commit/11279f3891f1da1d3e3ab95315e51ed81ca793cb))
+
 ## [0.7.0](https://github.com/iubebe/ibb_shop_backend/compare/ibb_shop_backend-v0.6.0...ibb_shop_backend-v0.7.0) (2026-10-22)
 
 
