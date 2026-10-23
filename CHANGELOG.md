@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/iubebe/ibb_shop_backend/compare/ibb_shop_backend-v0.8.0...ibb_shop_backend-v0.9.0) (2026-10-23)
+
+
+### Features
+
+* roi and investment ([ec589fd](https://github.com/iubebe/ibb_shop_backend/commit/ec589fda5864ebf22b76542ec472560d732ede3f))
+
 ## [0.8.0](https://github.com/iubebe/ibb_shop_backend/compare/ibb_shop_backend-v0.7.0...ibb_shop_backend-v0.8.0) (2026-10-22)
 
 
