@@ -27,8 +27,8 @@ describe('parseOrderImportFile', () => {
 
     expect(result.errors).toEqual([]);
     expect(result.rows).toEqual([
-      { rowNumber: 2, orderKey: 'DH1', table: 'Bàn 1', product: 'Phở bò', quantity: 2, notes: 'ít hành' },
-      { rowNumber: 4, orderKey: 'DH1', table: 'Bàn 1', product: 'Trà đá', quantity: 1, notes: null },
+      { rowNumber: 2, orderKey: 'DH1', table: 'Bàn 1', product: 'Phở bò', quantity: 2, notes: 'ít hành', orderedAt: null, paymentMethod: null },
+      { rowNumber: 4, orderKey: 'DH1', table: 'Bàn 1', product: 'Trà đá', quantity: 1, notes: null, orderedAt: null, paymentMethod: null },
     ]);
   });
 
@@ -76,12 +76,61 @@ describe('buildOrderImportTemplate', () => {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer as never);
     const orders = wb.getWorksheet('Đơn hàng')!;
-    expect(orders.getRow(1).values).toEqual([undefined, ...HEADER]);
+    expect(orders.getRow(1).values).toEqual([undefined, ...HEADER, 'Ngày', 'Thanh toán']);
     expect(orders.rowCount).toBe(1);
     expect(wb.getWorksheet('Bàn')!.getColumn(1).values).toEqual([undefined, 'Tên bàn', 'Bàn 1', 'Bàn 2']);
     expect(wb.getWorksheet('Món')!.getColumn(1).values).toEqual([undefined, 'Tên món', 'Phở bò']);
 
     // The template itself must import cleanly: header only, no data rows.
     expect(await parseOrderImportFile(buffer)).toEqual({ rows: [], errors: [] });
+  });
+});
+
+describe('parseOrderImportFile date and payment columns', () => {
+  const HEADER_WITH_DATE = [...HEADER, 'Ngày', 'Thanh toán'];
+
+  it('reads text dates as shop time, defaulting to 12:00 and cash', async () => {
+    const result = await parseOrderImportFile(
+      await workbook(
+        [
+          ['A', 'Bàn 1', 'Phở bò', 1, null, '05/03/2026', null],
+          ['B', 'Bàn 1', 'Phở bò', 1, null, '2026-03-05 08:15', 'chuyển khoản'],
+        ],
+        HEADER_WITH_DATE,
+      ),
+    );
+
+    expect(result.errors).toEqual([]);
+    expect(result.rows[0].orderedAt).toEqual(new Date('2026-03-05T12:00:00+07:00'));
+    expect(result.rows[0].paymentMethod).toBe('cash');
+    expect(result.rows[1].orderedAt).toEqual(new Date('2026-03-05T08:15:00+07:00'));
+    expect(result.rows[1].paymentMethod).toBe('qr_manual');
+  });
+
+  it('reads a real Excel date cell', async () => {
+    const wb = new ExcelJS.Workbook();
+    const sheet = wb.addWorksheet('Đơn hàng');
+    sheet.addRow(HEADER_WITH_DATE);
+    sheet.addRow(['A', 'Bàn 1', 'Phở bò', 1, null, new Date(Date.UTC(2026, 2, 5, 9, 30)), null]);
+    const result = await parseOrderImportFile(Buffer.from(await wb.xlsx.writeBuffer()));
+
+    expect(result.rows[0].orderedAt).toEqual(new Date('2026-03-05T09:30:00+07:00'));
+  });
+
+  it('flags bad dates, bad payment, and payment without a date', async () => {
+    const result = await parseOrderImportFile(
+      await workbook(
+        [
+          ['A', 'Bàn 1', 'Phở bò', 1, null, '31/02/2026', null],
+          ['B', 'Bàn 1', 'Phở bò', 1, null, 'hôm qua', null],
+          ['C', 'Bàn 1', 'Phở bò', 1, null, '05/03/2026', 'thẻ'],
+          ['D', 'Bàn 1', 'Phở bò', 1, null, null, 'Tiền mặt'],
+        ],
+        HEADER_WITH_DATE,
+      ),
+    );
+
+    expect(result.rows).toEqual([]);
+    expect(result.errors.map((e) => e.row)).toEqual([2, 3, 4, 5]);
   });
 });

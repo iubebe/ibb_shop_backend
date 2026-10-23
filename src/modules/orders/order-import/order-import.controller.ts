@@ -56,6 +56,6 @@ export class OrderImportController {
     if (!workbook?.buffer) {
       throw new BadRequestException(`Upload an .xlsx file in field "${ORDER_IMPORT_FIELD}"`);
     }
-    return this.imports.import(user.branchId, user.id, workbook.buffer);
+    return this.imports.import(user.branchId, user.id, user.role, workbook.buffer);
   }
 }
