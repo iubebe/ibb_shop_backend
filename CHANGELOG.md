@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.0](https://github.com/iubebe/ibb_shop_backend/compare/ibb_shop_backend-v0.9.0...ibb_shop_backend-v0.10.0) (2026-10-23)
+
+
+### Features
+
+* back date order ([ce2230e](https://github.com/iubebe/ibb_shop_backend/commit/ce2230e556576b356ecbe32a8825bd3c33047599))
+* break even and kpi ([c149b3c](https://github.com/iubebe/ibb_shop_backend/commit/c149b3c972bb50a4b4f9a8e561de7eac0c6f2d7e))
+
 ## [0.9.0](https://github.com/iubebe/ibb_shop_backend/compare/ibb_shop_backend-v0.8.0...ibb_shop_backend-v0.9.0) (2026-10-23)
 
 
