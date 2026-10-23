@@ -1,9 +1,18 @@
 import ExcelJS from 'exceljs';
 import JSZip from 'jszip';
-import { ExpenseCategory, PaymentMethod } from '../../../database/enums.js';
+import {
+  ExpenseCategory,
+  InvestmentCategory,
+  PaymentMethod,
+} from '../../../database/enums.js';
 import { FinanceExportService } from '../finance-export.service.js';
 import type { FinanceService } from '../finance.service.js';
-import type { ExpenseView, FinanceSummary } from '../finance.types.js';
+import type {
+  ExpenseView,
+  FinanceSummary,
+  RoiSummary,
+} from '../finance.types.js';
+import type { InvestmentsService } from '../investments.service.js';
 
 const summary: FinanceSummary = {
   from: '2026-10-01',
@@ -49,12 +58,39 @@ const expenses: ExpenseView[] = [
   },
 ];
 
-function service(data: FinanceSummary = summary) {
+const roi: RoiSummary = {
+  from: '2026-10-01',
+  to: '2026-10-04',
+  totalInvested: 1_000_000,
+  investedInRange: 400_000,
+  profit: 110_000,
+  roiPercent: 11,
+  paybackMonths: 9.1,
+  byCategory: [{ category: InvestmentCategory.EQUIPMENT, amount: 1_000_000 }],
+  items: [
+    {
+      id: 'i1',
+      name: 'Máy pha cà phê',
+      category: InvestmentCategory.EQUIPMENT,
+      amount: 1_000_000,
+      investedOn: '2026-10-02',
+      note: null,
+      createdByName: 'Admin',
+      createdAt: new Date(),
+      sharePercent: 100,
+    },
+  ],
+};
+
+function service(data: FinanceSummary = summary, roiData: RoiSummary = roi) {
   const finance = {
     summary: vi.fn().mockResolvedValue(data),
     listExpenses: vi.fn().mockResolvedValue(expenses),
   } as unknown as FinanceService;
-  return new FinanceExportService(finance);
+  const investments = {
+    roi: vi.fn().mockResolvedValue(roiData),
+  } as unknown as InvestmentsService;
+  return new FinanceExportService(finance, investments);
 }
 
 describe('FinanceExportService', () => {
@@ -68,9 +104,15 @@ describe('FinanceExportService', () => {
       'Theo ngày',
       'Lương',
       'Chi phí vận hành',
+      'Đầu tư & ROI',
     ]);
     expect(wb.getWorksheet('Tổng quan')!.getCell('B5').value).toBe(300_000);
     expect(wb.getWorksheet('Theo ngày')!.rowCount).toBe(4);
+    expect(wb.getWorksheet('Tổng quan')!.getCell('B13').value).toBe(1_000_000);
+    expect(wb.getWorksheet('Tổng quan')!.getCell('B14').value).toBe(11);
+    const invest = wb.getWorksheet('Đầu tư & ROI')!;
+    expect(invest.getCell('B2').value).toBe('Máy pha cà phê');
+    expect(invest.getCell('D3').value).toBe(1_000_000);
   });
 
   it('wires every chart into its sheet, drawing and content types', async () => {
@@ -78,13 +120,13 @@ describe('FinanceExportService', () => {
     const zip = await JSZip.loadAsync(buffer);
     const files = Object.keys(zip.files);
 
-    // overview: cost pie, method pie, category bar; daily: 2; salary: 1.
-    expect(files.filter((f) => /^xl\/charts\/chart\d+\.xml$/.test(f))).toHaveLength(6);
+    // overview: cost pie, method pie, category bar; daily: 2; salary: 1; investments pie: 1.
+    expect(files.filter((f) => /^xl\/charts\/chart\d+\.xml$/.test(f))).toHaveLength(7);
     const types = await zip.file('[Content_Types].xml')!.async('string');
-    expect(types.match(/drawingml\.chart\+xml/g)).toHaveLength(6);
-    expect(types.match(/drawing\+xml/g)).toHaveLength(3);
+    expect(types.match(/drawingml\.chart\+xml/g)).toHaveLength(7);
+    expect(types.match(/drawing\+xml/g)).toHaveLength(4);
 
-    for (const sheet of [1, 2, 3]) {
+    for (const sheet of [1, 2, 3, 5]) {
       const xml = await zip.file(`xl/worksheets/sheet${sheet}.xml`)!.async('string');
       expect(xml).toContain('<drawing r:id="rIdFinanceDrawing"/>');
       expect(xml.indexOf('<drawing ')).toBeLessThan(xml.indexOf('</worksheet>'));
@@ -104,7 +146,15 @@ describe('FinanceExportService', () => {
       salary: [],
       daily: [],
     };
-    const buffer = await service(empty).exportXlsx('b1', '2026-10-01', '2026-10-04');
+    const noRoi: RoiSummary = {
+      ...roi,
+      totalInvested: 0,
+      roiPercent: null,
+      paybackMonths: null,
+      byCategory: [],
+      items: [],
+    };
+    const buffer = await service(empty, noRoi).exportXlsx('b1', '2026-10-01', '2026-10-04');
     const zip = await JSZip.loadAsync(buffer);
     const charts = Object.keys(zip.files).filter((f) => /^xl\/charts\/chart\d+\.xml$/.test(f));
     expect(charts).toHaveLength(1);

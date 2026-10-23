@@ -264,7 +264,8 @@ export class FinanceService {
     return row;
   }
 
-  private assertDay(day: string) {
+  /** @throws BadRequestException unless `day` is a real calendar day. */
+  assertDay(day: string) {
     const parsed = new Date(`${day}T00:00:00Z`);
     if (
       Number.isNaN(parsed.getTime()) ||
@@ -274,7 +275,7 @@ export class FinanceService {
     }
   }
 
-  private assertRange(from: string, to: string) {
+  assertRange(from: string, to: string) {
     this.assertDay(from);
     this.assertDay(to);
     const span = Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`);
