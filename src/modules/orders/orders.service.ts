@@ -16,8 +16,9 @@ import { resolveCustomer, toCustomerInfo } from '../customers/customer-info.js';
 import type { AddOrderItemsDto } from './dto/add-order-items.dto.js';
 import type { CreateOrderStaffDto } from './dto/create-order-staff.dto.js';
 import type { UpdateOrderCustomerDto } from './dto/update-order-customer.dto.js';
+import { buildDynamicPayload, readBank } from '../payment-qr-codes/vietqr.js';
 import { isOnlineTable } from './online-table.js';
-import type { ServedItemView, StaffOrderView } from './orders.types.js';
+import type { OrderPaymentQrView, ServedItemView, StaffOrderView } from './orders.types.js';
 
 /** Staff-side order reads and serving progress, always scoped to the user's branch. */
 @Injectable()
@@ -49,6 +50,26 @@ export class OrdersService {
     }
     const orders = await this.orders.find({
       where: { branchId, createdAt: And(MoreThanOrEqual(from), LessThan(to)) },
+      relations: { table: true, items: { product: true } },
+      order: { createdAt: 'DESC' },
+    });
+    return orders.map((o) => this.toStaffOrderView(o));
+  }
+
+  /** Orders of any day whose number (id prefix, as printed on the receipt) starts with `code`. */
+  async searchByNumber(branchId: string, code: string): Promise<StaffOrderView[]> {
+    const matches = await this.orders
+      .createQueryBuilder('o')
+      .select('o.id', 'id')
+      .where('o.branchId = :branchId', { branchId })
+      // uuid range instead of a text prefix match, so the primary key index serves it.
+      .andWhere('o.id BETWEEN :lo::uuid AND :hi::uuid', uuidRange(code))
+      .orderBy('o.createdAt', 'DESC')
+      .limit(20)
+      .getRawMany<{ id: string }>();
+    if (matches.length === 0) return [];
+    const orders = await this.orders.find({
+      where: { id: In(matches.map((m) => m.id)) },
       relations: { table: true, items: { product: true } },
       order: { createdAt: 'DESC' },
     });
@@ -328,6 +349,24 @@ export class OrdersService {
     });
   }
 
+  /**
+   * Active QR codes with a per-order transfer QR: the order total and a short order code are baked
+   * into the payload, so the customer's bank app opens with amount and note filled in.
+   * `dynamicPayload` is null for QR images that are not VietQR.
+   */
+  async getOrderPaymentQrs(branchId: string, orderId: string): Promise<OrderPaymentQrView[]> {
+    const order = await this.orders.findOneBy({ id: orderId, branchId });
+    if (!order) throw new NotFoundException('Order not found');
+    const memo = `IBB ${order.id.slice(0, 8).toUpperCase()}`;
+    const codes = await this.getPaymentQrCodes(branchId);
+    return codes.map((qr) => ({
+      id: qr.id,
+      label: qr.label,
+      dynamicPayload: qr.qrPayload ? buildDynamicPayload(qr.qrPayload, order.total, memo) : null,
+      bank: qr.qrPayload ? readBank(qr.qrPayload) : null,
+    }));
+  }
+
   /** Sets how many units of an item were delivered to the table. */
   async setServed(
     branchId: string,
@@ -381,4 +420,13 @@ export class OrdersService {
       })),
     };
   }
+}
+
+/** Smallest and largest uuid starting with the hex `prefix` (3-8 chars, no dashes). */
+export function uuidRange(prefix: string): { lo: string; hi: string } {
+  const fill = (digit: string) => {
+    const hex = prefix.toLowerCase().padEnd(32, digit);
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  };
+  return { lo: fill('0'), hi: fill('f') };
 }
