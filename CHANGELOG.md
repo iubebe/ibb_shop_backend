@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.1](https://github.com/iubebe/ibb_shop_backend/compare/ibb_shop_backend-v0.11.0...ibb_shop_backend-v0.11.1) (2026-10-24)
+
+
+### Bug Fixes
+
+* qrcode runtime ([8aa747f](https://github.com/iubebe/ibb_shop_backend/commit/8aa747f65679bc37a273efe91c4ffa9133e6b962))
+
 ## [0.11.0](https://github.com/iubebe/ibb_shop_backend/compare/ibb_shop_backend-v0.10.0...ibb_shop_backend-v0.11.0) (2026-10-24)
 
 
