@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import ExcelJS from 'exceljs';
-import { OrderStatus } from '../../../../database/enums.js';
+import { OrderStatus, PaymentMethod, UserRole } from '../../../../database/enums.js';
 import { OrderImportService } from '../order-import.service.js';
 
 const HEADER = ['Mã đơn', 'Bàn', 'Món', 'Số lượng', 'Ghi chú'];
@@ -41,9 +41,26 @@ function build() {
   };
   const tableRepo = { find: vi.fn().mockResolvedValue(tables) };
   const productRepo = { find: vi.fn().mockResolvedValue(products) };
-  const service = new OrderImportService(tableRepo as never, productRepo as never, dataSource as never);
+  const backdated = {
+    createMany: vi.fn(async (_b: string, _u: string, drafts: any[]) =>
+      drafts.map((d, i) => ({
+        id: `h${i + 1}`,
+        tableName: 'Bàn 1',
+        orderedAt: d.orderedAt,
+        itemCount: d.lines.length,
+        total: 99,
+      })),
+    ),
+  };
+  const service = new OrderImportService(
+    tableRepo as never,
+    productRepo as never,
+    dataSource as never,
+    backdated as never,
+  );
   return {
     service,
+    backdated,
     manager,
     tableRepo,
     productRepo,
@@ -66,12 +83,12 @@ describe('OrderImportService.import', () => {
       ['DH2', 'Bàn 2', 'Trà đá', 3, null],
     ]);
 
-    const result = await ctx.service.import('b1', 'u1', file);
+    const result = await ctx.service.import('b1', 'u1', UserRole.STAFF, file);
 
     expect(result.created).toBe(2);
     expect(result.orders).toEqual([
-      { id: 'o1', orderKey: 'DH1', tableName: 'Bàn 1', itemCount: 2, total: 155000 },
-      { id: 'o2', orderKey: 'DH2', tableName: 'Bàn 2', itemCount: 1, total: 15000 },
+      { id: 'o1', orderKey: 'DH1', tableName: 'Bàn 1', itemCount: 2, total: 155000, orderedAt: null },
+      { id: 'o2', orderKey: 'DH2', tableName: 'Bàn 2', itemCount: 1, total: 15000, orderedAt: null },
     ]);
     expect(ctx.savedOrders[0]).toMatchObject({
       branchId: 'b1',
@@ -96,7 +113,7 @@ describe('OrderImportService.import', () => {
       ['DH3', 'Bàn 2', 'Trà đá', 1, null],
     ]);
 
-    const error = await ctx.service.import('b1', 'u1', file).catch((e) => e);
+    const error = await ctx.service.import('b1', 'u1', UserRole.STAFF, file).catch((e) => e);
 
     expect(error).toBeInstanceOf(BadRequestException);
     expect(error.getResponse()).toEqual({
@@ -115,7 +132,7 @@ describe('OrderImportService.import', () => {
     const ctx = build();
     const file = await xlsx([['DH1', '  bàn   1 ', 'PHỞ BÒ', 1, null]]);
 
-    const result = await ctx.service.import('b1', 'u1', file);
+    const result = await ctx.service.import('b1', 'u1', UserRole.STAFF, file);
 
     expect(result.created).toBe(1);
     expect(ctx.savedItems[0]).toMatchObject({ productId: 'p1' });
@@ -129,7 +146,7 @@ describe('OrderImportService.import', () => {
     ]);
     const file = await xlsx([['DH1', 'Bàn 1', 'Phở bò', 1, null]]);
 
-    const error = await ctx.service.import('b1', 'u1', file).catch((e) => e);
+    const error = await ctx.service.import('b1', 'u1', UserRole.STAFF, file).catch((e) => e);
 
     expect(error.getResponse().errors).toEqual([
       { row: 2, message: 'Product name is not unique: "Phở bò"' },
@@ -141,7 +158,7 @@ describe('OrderImportService.import', () => {
     const ctx = build();
     const rows = Array.from({ length: 51 }, () => ['DH1', 'Bàn 1', 'Phở bò', 1, null]);
 
-    const error = await ctx.service.import('b1', 'u1', await xlsx(rows)).catch((e) => e);
+    const error = await ctx.service.import('b1', 'u1', UserRole.STAFF, await xlsx(rows)).catch((e) => e);
 
     expect(error.getResponse().errors).toEqual([
       { row: 52, message: 'Order "DH1" has more than 50 lines' },
@@ -150,9 +167,70 @@ describe('OrderImportService.import', () => {
 
   it('queries only the caller branch', async () => {
     const ctx = build();
-    await ctx.service.import('b1', 'u1', await xlsx([['DH1', 'Bàn 1', 'Phở bò', 1, null]]));
+    await ctx.service.import('b1', 'u1', UserRole.STAFF, await xlsx([['DH1', 'Bàn 1', 'Phở bò', 1, null]]));
 
     expect(ctx.tableRepo.find).toHaveBeenCalledWith({ where: { branchId: 'b1' } });
     expect(ctx.productRepo.find).toHaveBeenCalledWith({ where: { branchId: 'b1', isActive: true } });
+  });
+
+  describe('rows with a date', () => {
+    const HEADER_WITH_DATE = [...HEADER, 'Ngày', 'Thanh toán'];
+    async function dated(rows: (string | number | null)[][]) {
+      const wb = new ExcelJS.Workbook();
+      const sheet = wb.addWorksheet('Đơn hàng');
+      sheet.addRow(HEADER_WITH_DATE);
+      for (const row of rows) sheet.addRow(row);
+      return Buffer.from(await wb.xlsx.writeBuffer());
+    }
+
+    it('sends dated orders to the backdated service and keeps live orders live, in file order', async () => {
+      const ctx = build();
+      const file = await dated([
+        ['OLD', 'Bàn 1', 'Phở bò', 2, null, '20/10/2026 18:30', 'Chuyển khoản'],
+        ['NEW', 'Bàn 2', 'Trà đá', 1, null, null, null],
+      ]);
+
+      const result = await ctx.service.import('b1', 'u1', UserRole.ADMIN, file);
+
+      expect(ctx.backdated.createMany).toHaveBeenCalledTimes(1);
+      const [, , drafts, manager] = ctx.backdated.createMany.mock.calls[0];
+      expect(manager).toBe(ctx.manager);
+      expect(drafts).toEqual([
+        {
+          tableId: 't1',
+          orderedAt: new Date('2026-10-20T18:30:00+07:00'),
+          paymentMethod: PaymentMethod.QR_MANUAL,
+          lines: [{ productId: 'p1', quantity: 2, notes: null }],
+        },
+      ]);
+      expect(ctx.savedOrders).toHaveLength(1);
+      expect(result.orders.map((o) => o.orderKey)).toEqual(['OLD', 'NEW']);
+      expect(result.orders[0].orderedAt).toEqual(new Date('2026-10-20T18:30:00+07:00'));
+      expect(result.orders[1].orderedAt).toBeNull();
+    });
+
+    it('rejects dated rows from non-admin users', async () => {
+      const ctx = build();
+      const file = await dated([['OLD', 'Bàn 1', 'Phở bò', 1, null, '20/10/2026', null]]);
+
+      const error = await ctx.service.import('b1', 'u1', UserRole.STAFF, file).catch((e) => e);
+
+      expect(error.getResponse().errors).toEqual([{ row: 2, message: 'Chỉ admin được nhập đơn có ngày' }]);
+      expect(ctx.backdated.createMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects an order whose lines disagree on date', async () => {
+      const ctx = build();
+      const file = await dated([
+        ['OLD', 'Bàn 1', 'Phở bò', 1, null, '20/10/2026', null],
+        ['OLD', 'Bàn 1', 'Trà đá', 1, null, '21/10/2026', null],
+      ]);
+
+      const error = await ctx.service.import('b1', 'u1', UserRole.ADMIN, file).catch((e) => e);
+
+      expect(error.getResponse().errors).toEqual([
+        { row: 3, message: 'Order "OLD" must use the same date and payment on every line' },
+      ]);
+    });
   });
 });

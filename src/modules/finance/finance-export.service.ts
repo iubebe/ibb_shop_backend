@@ -7,8 +7,10 @@ import {
 } from '../../database/enums.js';
 import { addCharts, type ChartSpec } from './finance-export.charts.js';
 import { FinanceService } from './finance.service.js';
+import { BreakEvenService } from './break-even.service.js';
 import { InvestmentsService } from './investments.service.js';
 import type {
+  BreakEvenSummary,
   ExpenseView,
   FinanceSummary,
   RoiSummary,
@@ -62,6 +64,7 @@ const SHEET = {
   salary: { index: 3, name: 'Lương' },
   expenses: { index: 4, name: 'Chi phí vận hành' },
   investments: { index: 5, name: 'Đầu tư & ROI' },
+  breakEven: { index: 6, name: 'Hòa vốn & KPI' },
 } as const;
 
 /** `2026-10-17` -> `17/10/2026` */
@@ -75,13 +78,15 @@ export class FinanceExportService {
   constructor(
     private readonly finance: FinanceService,
     private readonly investments: InvestmentsService,
+    private readonly breakEven: BreakEvenService,
   ) {}
 
   async exportXlsx(branchId: string, from: string, to: string): Promise<Buffer> {
-    const [summary, expenses, roi] = await Promise.all([
+    const [summary, expenses, roi, breakEven] = await Promise.all([
       this.finance.summary(branchId, from, to),
       this.finance.listExpenses(branchId, from, to),
       this.investments.roi(branchId, from, to),
+      this.breakEven.breakEven(branchId, from, to),
     ]);
 
     const workbook = new ExcelJS.Workbook();
@@ -91,6 +96,7 @@ export class FinanceExportService {
     this.salarySheet(workbook, summary, charts);
     this.expensesSheet(workbook, expenses);
     this.investmentsSheet(workbook, roi, charts);
+    this.breakEvenSheet(workbook, breakEven, charts);
 
     const plain = Buffer.from(await workbook.xlsx.writeBuffer());
     return addCharts(plain, charts);
@@ -371,6 +377,87 @@ export class FinanceExportService {
     charts.push(
       pieChart(index, name, 'Cơ cấu vốn đầu tư', categories, { col: 7, row: 1 }),
     );
+  }
+
+  private breakEvenSheet(
+    workbook: ExcelJS.Workbook,
+    be: BreakEvenSummary,
+    charts: ChartSpec[],
+  ) {
+    const { index, name } = SHEET.breakEven;
+    const sheet = workbook.addWorksheet(name);
+    sheet.columns = [{ width: 44 }, { width: 20 }, { width: 4 }];
+    const lastDay = lastInclusiveDay(be.to);
+    sheet.getCell('A1').value = 'Hòa vốn & KPI gợi ý';
+    sheet.getCell('A1').font = { bold: true, size: 16 };
+    sheet.getCell('A2').value =
+      `Từ ${formatDay(be.from)} đến ${formatDay(lastDay)}`;
+
+    const none = 'Chưa tính được';
+    /** Writes `label | value` rows; `null` shows a note instead of a number. */
+    const put = (
+      row: number,
+      header: [string, string],
+      lines: [string, number | null, string?][],
+    ) => {
+      const head = sheet.getRow(row);
+      head.values = header;
+      head.font = { bold: true };
+      lines.forEach(([label, value, fmt], i) => {
+        const r = sheet.getRow(row + 1 + i);
+        r.values = [label, value ?? none];
+        r.getCell(2).numFmt = fmt ?? MONEY;
+      });
+      return row + 1 + lines.length;
+    };
+
+    let row = put(4, ['Hòa vốn vận hành', 'Giá trị'], [
+      ['Chi phí cố định (vận hành + lương)', be.fixedCost],
+      ['Tỷ lệ chi phí biến đổi (nhập hàng / doanh thu)', be.variableCostRatio, '0.00'],
+      ['Tỷ lệ lãi gộp (1 - tỷ lệ biến đổi)', be.contributionMarginRatio, '0.00'],
+      ['Giá trị đơn trung bình', be.avgOrderValue],
+      ['Doanh thu hòa vốn / tháng', be.breakEvenRevenue],
+      ['Doanh thu hòa vốn / ngày', be.breakEvenRevenuePerDay],
+      ['Số đơn hòa vốn / ngày', be.breakEvenOrdersPerDay],
+      ['Doanh thu thực tế', be.revenue],
+      ['Đạt hòa vốn (%)', be.breakEvenProgressPercent, '0.0'],
+    ]);
+    row += 1;
+
+    const k = be.kpi;
+    row = put(row, ['KPI gợi ý của tháng', 'Mục tiêu'], [
+      ['Doanh thu', k.targetRevenue],
+      ['Doanh thu / ngày', k.targetRevenuePerDay],
+      ['Số đơn', k.targetOrders],
+      ['Số đơn / ngày', k.targetOrdersPerDay],
+      ['Lợi nhuận', k.targetProfit],
+      ['Trần chi phí nhập hàng', k.maxImportCost],
+    ]);
+    sheet.getCell(`A${row + 1}`).value =
+      `Lợi nhuận mục tiêu = vốn đầu tư (${k.totalInvested.toLocaleString('en-US')}) / ${k.paybackTargetMonths} tháng. ` +
+      'Doanh thu mục tiêu = (chi phí cố định + lợi nhuận mục tiêu) / tỷ lệ lãi gộp. ' +
+      'Nhập hàng tính theo tiền đã chi, không phải giá vốn.';
+    sheet.getCell(`A${row + 1}`).font = { italic: true };
+
+    if (be.breakEvenRevenue === null || k.targetRevenue === null) return;
+    const chartStart = row + 3;
+    const table = writeTable(sheet, chartStart, ['So sánh doanh thu', 'Số tiền'], [
+      ['Thực tế', be.revenue],
+      ['Hòa vốn', be.breakEvenRevenue],
+      ['Mục tiêu KPI', k.targetRevenue],
+    ]);
+    charts.push({
+      sheet: index,
+      sheetName: name,
+      kind: 'column',
+      title: 'Doanh thu: thực tế, hòa vốn, mục tiêu',
+      categories: table.labels,
+      categoryColumn: 'A',
+      firstRow: table.firstRow,
+      seriesColumns: ['B'],
+      series: [{ name: 'Số tiền', values: table.values, color: COLORS.neutral }],
+      anchor: { col: 3, row: 3, cols: 8, rows: 16 },
+    });
   }
 
   private expensesSheet(workbook: ExcelJS.Workbook, expenses: ExpenseView[]) {
