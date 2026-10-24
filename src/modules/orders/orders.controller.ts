@@ -15,6 +15,7 @@ import { UserRole } from '../../database/enums.js';
 import { AddOrderItemsDto } from './dto/add-order-items.dto.js';
 import { CreateOrderStaffDto } from './dto/create-order-staff.dto.js';
 import { OrderHistoryQuery } from './dto/order-history.query.js';
+import { OrderSearchQuery } from './dto/order-search.query.js';
 import { ListOrdersQuery } from './dto/list-orders.query.js';
 import { UpdateOrderCustomerDto } from './dto/update-order-customer.dto.js';
 import { UpdateServedDto } from './dto/update-served.dto.js';
@@ -36,6 +37,13 @@ export class OrdersController {
   @Get('history')
   history(@CurrentUser() user: AuthUser, @Query() query: OrderHistoryQuery) {
     return this.orders.history(user.branchId, new Date(query.from), new Date(query.to));
+  }
+
+  /** Find orders by their receipt number, across all days (admin, staff). */
+  @Roles(UserRole.ADMIN, UserRole.STAFF)
+  @Get('search')
+  search(@CurrentUser() user: AuthUser, @Query() query: OrderSearchQuery) {
+    return this.orders.searchByNumber(user.branchId, query.code.toLowerCase());
   }
 
   /** Create an order for a table with items (staff/admin only). */
@@ -96,6 +104,15 @@ export class OrdersController {
   @Get('payment-qr-codes')
   getPaymentQrCodes(@CurrentUser() user: AuthUser) {
     return this.orders.getPaymentQrCodes(user.branchId);
+  }
+
+  /** Transfer QRs for one order, with its total filled in. */
+  @Get(':orderId/payment-qrs')
+  getOrderPaymentQrs(
+    @CurrentUser() user: AuthUser,
+    @Param('orderId', ParseUUIDPipe) orderId: string,
+  ) {
+    return this.orders.getOrderPaymentQrs(user.branchId, orderId);
   }
 
   /** Staff marks how many units were delivered to the table. */

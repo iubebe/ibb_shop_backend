@@ -10,6 +10,7 @@ import { RedisService } from '../../redis/redis.service.js';
 import { S3Service } from '../../s3/s3.service.js';
 import type { DownloadResult } from '../../s3/s3.types.js';
 import type { UpdatePaymentQrCodeDto } from './dto/payment-qr-code.dto.js';
+import { decodeVietQr } from './qr-decode.js';
 
 const QR_BUCKET = 'payment-qr';
 const LIST_TTL_SECONDS = 300;
@@ -44,8 +45,9 @@ export class PaymentQrCodesService {
   async create(branchId: string, label: string, buffer: Buffer | undefined): Promise<PaymentQrCode> {
     const { key } = await this.storeImage(branchId, buffer);
     try {
+      const qrPayload = await decodeVietQr(buffer!);
       const saved = await this.qrCodes.save(
-        this.qrCodes.create({ branchId, label, imagePath: key, isActive: true }),
+        this.qrCodes.create({ branchId, label, imagePath: key, qrPayload, isActive: true }),
       );
       await this.invalidate(branchId);
       return saved;
@@ -70,6 +72,7 @@ export class PaymentQrCodesService {
     const { key } = await this.storeImage(branchId, buffer);
     try {
       qr.imagePath = key;
+      qr.qrPayload = await decodeVietQr(buffer!);
       const saved = await this.qrCodes.save(qr);
       await this.invalidate(branchId, oldKey);
       await this.deleteObject(oldKey);

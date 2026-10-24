@@ -21,6 +21,10 @@ export class PaymentQrCode extends BaseEntity {
   @Column()
   imagePath: string;
 
+  /** Text decoded from the image when it is a VietQR; null = static image only (no per-order amount). */
+  @Column({ type: 'text', nullable: true })
+  qrPayload: string | null;
+
   @Column({ default: true })
   isActive: boolean;
 }

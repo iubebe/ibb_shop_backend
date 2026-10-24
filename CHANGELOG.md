@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.0](https://github.com/iubebe/ibb_shop_backend/compare/ibb_shop_backend-v0.10.0...ibb_shop_backend-v0.11.0) (2026-10-24)
+
+
+### Features
+
+* dynamic qr code ([17fa43f](https://github.com/iubebe/ibb_shop_backend/commit/17fa43ff5f163c7588ea7330c3c60ab0e5654bb3))
+* order history search ([4e90635](https://github.com/iubebe/ibb_shop_backend/commit/4e90635406af41d5385c33fc8d559a4876a85899))
+
 ## [0.10.0](https://github.com/iubebe/ibb_shop_backend/compare/ibb_shop_backend-v0.9.0...ibb_shop_backend-v0.10.0) (2026-10-23)
 
 
