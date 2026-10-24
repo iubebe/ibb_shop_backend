@@ -56,6 +56,26 @@ export class OrdersService {
     return orders.map((o) => this.toStaffOrderView(o));
   }
 
+  /** Orders of any day whose number (id prefix, as printed on the receipt) starts with `code`. */
+  async searchByNumber(branchId: string, code: string): Promise<StaffOrderView[]> {
+    const matches = await this.orders
+      .createQueryBuilder('o')
+      .select('o.id', 'id')
+      .where('o.branchId = :branchId', { branchId })
+      // uuid range instead of a text prefix match, so the primary key index serves it.
+      .andWhere('o.id BETWEEN :lo::uuid AND :hi::uuid', uuidRange(code))
+      .orderBy('o.createdAt', 'DESC')
+      .limit(20)
+      .getRawMany<{ id: string }>();
+    if (matches.length === 0) return [];
+    const orders = await this.orders.find({
+      where: { id: In(matches.map((m) => m.id)) },
+      relations: { table: true, items: { product: true } },
+      order: { createdAt: 'DESC' },
+    });
+    return orders.map((o) => this.toStaffOrderView(o));
+  }
+
   async createOrder(
     branchId: string,
     userId: string,
@@ -400,4 +420,13 @@ export class OrdersService {
       })),
     };
   }
+}
+
+/** Smallest and largest uuid starting with the hex `prefix` (3-8 chars, no dashes). */
+export function uuidRange(prefix: string): { lo: string; hi: string } {
+  const fill = (digit: string) => {
+    const hex = prefix.toLowerCase().padEnd(32, digit);
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  };
+  return { lo: fill('0'), hi: fill('f') };
 }

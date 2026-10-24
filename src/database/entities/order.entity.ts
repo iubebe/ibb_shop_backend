@@ -18,6 +18,10 @@ import { User } from './user.entity.js';
 
 @Entity('orders')
 @Index(['branchId', 'status'])
+// Order history / dashboard: one branch, newest first, by day range.
+@Index('IDX_orders_branch_createdAt', ['branchId', 'createdAt'])
+// Revenue (dashboard, finance): paid orders of a branch in a paidAt range.
+@Index('IDX_orders_branch_status_paidAt', ['branchId', 'status', 'paidAt'])
 export class Order extends BaseEntity {
   @Column({ type: 'uuid' })
   branchId: string;

@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { OrderStatus } from '../../../database/enums.js';
 import type { CreateOrderStaffDto } from '../dto/create-order-staff.dto.js';
-import { OrdersService } from '../orders.service.js';
+import { OrdersService, uuidRange } from '../orders.service.js';
 
 function build(item: unknown) {
   const manager = {
@@ -410,6 +410,44 @@ describe('OrdersService.history', () => {
     expect(find).toHaveBeenCalledWith(
       expect.objectContaining({ order: { createdAt: 'DESC' }, where: expect.objectContaining({ branchId: 'b1' }) }),
     );
+  });
+});
+
+describe('uuidRange', () => {
+  it('pads a short prefix to the full uuid bounds, lower-casing it', () => {
+    expect(uuidRange('E9C')).toEqual({
+      lo: 'e9c00000-0000-0000-0000-000000000000',
+      hi: 'e9cfffff-ffff-ffff-ffff-ffffffffffff',
+    });
+  });
+});
+
+describe('OrdersService.searchByNumber', () => {
+  function buildSearch(ids: string[]) {
+    const qb: any = {};
+    for (const m of ['select', 'where', 'andWhere', 'orderBy', 'limit']) qb[m] = vi.fn(() => qb);
+    qb.getRawMany = vi.fn().mockResolvedValue(ids.map((id) => ({ id })));
+    const find = vi.fn().mockResolvedValue([]);
+    const repo = { createQueryBuilder: vi.fn(() => qb), find };
+    return { qb, find, service: new OrdersService(repo as never, {} as never, {} as never, {} as never, {} as never) };
+  }
+
+  it('matches the id prefix within the branch, newest first, capped, then loads the orders', async () => {
+    const { qb, find, service } = buildSearch(['o1', 'o2']);
+    await service.searchByNumber('b1', 'a1b2c3');
+    expect(qb.where).toHaveBeenCalledWith('o.branchId = :branchId', { branchId: 'b1' });
+    expect(qb.andWhere).toHaveBeenCalledWith('o.id BETWEEN :lo::uuid AND :hi::uuid', {
+      lo: 'a1b2c300-0000-0000-0000-000000000000',
+      hi: 'a1b2c3ff-ffff-ffff-ffff-ffffffffffff',
+    });
+    expect(qb.limit).toHaveBeenCalledWith(20);
+    expect(find).toHaveBeenCalledWith(expect.objectContaining({ order: { createdAt: 'DESC' } }));
+  });
+
+  it('skips the second query when nothing matches', async () => {
+    const { find, service } = buildSearch([]);
+    expect(await service.searchByNumber('b1', 'ffff')).toEqual([]);
+    expect(find).not.toHaveBeenCalled();
   });
 });
 
