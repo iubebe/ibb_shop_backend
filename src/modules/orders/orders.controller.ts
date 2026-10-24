@@ -98,6 +98,15 @@ export class OrdersController {
     return this.orders.getPaymentQrCodes(user.branchId);
   }
 
+  /** Transfer QRs for one order, with its total filled in. */
+  @Get(':orderId/payment-qrs')
+  getOrderPaymentQrs(
+    @CurrentUser() user: AuthUser,
+    @Param('orderId', ParseUUIDPipe) orderId: string,
+  ) {
+    return this.orders.getOrderPaymentQrs(user.branchId, orderId);
+  }
+
   /** Staff marks how many units were delivered to the table. */
   @Roles(UserRole.ADMIN, UserRole.STAFF)
   @Patch(':orderId/items/:itemId/served')

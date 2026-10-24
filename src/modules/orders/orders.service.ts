@@ -16,8 +16,9 @@ import { resolveCustomer, toCustomerInfo } from '../customers/customer-info.js';
 import type { AddOrderItemsDto } from './dto/add-order-items.dto.js';
 import type { CreateOrderStaffDto } from './dto/create-order-staff.dto.js';
 import type { UpdateOrderCustomerDto } from './dto/update-order-customer.dto.js';
+import { buildDynamicPayload, readBank } from '../payment-qr-codes/vietqr.js';
 import { isOnlineTable } from './online-table.js';
-import type { ServedItemView, StaffOrderView } from './orders.types.js';
+import type { OrderPaymentQrView, ServedItemView, StaffOrderView } from './orders.types.js';
 
 /** Staff-side order reads and serving progress, always scoped to the user's branch. */
 @Injectable()
@@ -326,6 +327,24 @@ export class OrdersService {
       where: { branchId, isActive: true },
       order: { createdAt: 'ASC' },
     });
+  }
+
+  /**
+   * Active QR codes with a per-order transfer QR: the order total and a short order code are baked
+   * into the payload, so the customer's bank app opens with amount and note filled in.
+   * `dynamicPayload` is null for QR images that are not VietQR.
+   */
+  async getOrderPaymentQrs(branchId: string, orderId: string): Promise<OrderPaymentQrView[]> {
+    const order = await this.orders.findOneBy({ id: orderId, branchId });
+    if (!order) throw new NotFoundException('Order not found');
+    const memo = `IBB ${order.id.slice(0, 8).toUpperCase()}`;
+    const codes = await this.getPaymentQrCodes(branchId);
+    return codes.map((qr) => ({
+      id: qr.id,
+      label: qr.label,
+      dynamicPayload: qr.qrPayload ? buildDynamicPayload(qr.qrPayload, order.total, memo) : null,
+      bank: qr.qrPayload ? readBank(qr.qrPayload) : null,
+    }));
   }
 
   /** Sets how many units of an item were delivered to the table. */
